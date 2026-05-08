@@ -1,7 +1,7 @@
 """Compact location map shared by detail pages and the compare view."""
 
 import folium
-import streamlit.components.v1 as components
+import streamlit as st
 
 from onlybirds.dashboard.urls import _hotspot_url
 
@@ -54,4 +54,4 @@ def _detail_location_map(
                 prefix="fa",
             ),
         ).add_to(m)
-    components.html(m.get_root().render(), height=height, scrolling=False)
+    st.iframe(m.get_root().render(), height=height)

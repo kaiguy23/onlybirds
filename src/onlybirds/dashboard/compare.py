@@ -210,7 +210,7 @@ def render_compare(data: DashboardData) -> None:
             "window.top.dispatchEvent(new CustomEvent('onlybirds:compare',{detail:v.split(',')}));"
             "}}catch(e){}</script>"
         )
-        st.iframe(sync_js, height=0)
+        st.iframe(sync_js, height=1)
     metas_all = [m for m in (_compare_item_meta(i, data) for i in current) if m]
     if len(metas_all) < 2:
         st.info(

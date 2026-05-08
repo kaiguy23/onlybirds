@@ -279,7 +279,15 @@ function render() {{
     const body = document.createElement('a');
     body.className = 'body';
     body.href = row.url;
-    body.target = '_self';
+    // The strip lives in a sandboxed iframe; `_self` would navigate the
+    // iframe itself (chip vanishes). `_top` is blocked by the sandbox, so
+    // we intercept the click and use `window.open(url, '_blank')` which
+    // is allowed via `allow-popups`.
+    body.target = '_blank';
+    body.onclick = (e) => {{
+      e.preventDefault();
+      window.open(row.url, '_blank');
+    }};
     body.textContent = (row.rare ? ('🚨' + row.rare + ' · ') : '') + row.tot + '× ' + (row.cons ? '⊕ ' : '') + row.name;
     chip.appendChild(body);
     const btn = document.createElement('button');

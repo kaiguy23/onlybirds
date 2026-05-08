@@ -6,7 +6,6 @@ import json
 import folium
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 
@@ -275,7 +274,7 @@ def render_map(data: DashboardData) -> None:
         preview_html = _REGION_PREVIEW_HTML_TEMPLATE.replace(
             "__BBOXES__", json.dumps(bboxes)
         )
-        components.html(preview_html, height=0)
+        st.iframe(preview_html, height=1)
 
 
 def render_consolidated_detail(
