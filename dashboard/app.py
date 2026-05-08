@@ -17,6 +17,7 @@ from pathlib import Path
 import folium
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 
@@ -86,17 +87,81 @@ def load_data(db_path: str) -> dict[str, pd.DataFrame]:
             """,
             conn,
         )
+        # Consolidated hotspots: dedupe targets across member hotspots.
+        consolidated_hotspots = pd.read_sql_query(
+            """
+            SELECT ch.consolidated_id, ch.name, ch.lat, ch.lon, ch.member_count,
+                   COUNT(DISTINCT t.species_code) AS target_count,
+                   COUNT(DISTINCT CASE WHEN t.is_rare = 1 THEN t.species_code END) AS rare_target_count
+            FROM consolidated_hotspots ch
+            LEFT JOIN consolidated_hotspot_members chm
+                   ON chm.consolidated_id = ch.consolidated_id
+            LEFT JOIN hotspot_obs ho ON ho.hotspot_id = chm.hotspot_id
+            LEFT JOIN targets t ON t.species_code = ho.species_code
+            GROUP BY ch.consolidated_id
+            """,
+            conn,
+        )
+        consolidated_members = pd.read_sql_query(
+            """
+            SELECT chm.consolidated_id, h.hotspot_id, h.name, h.lat, h.lon, h.region
+            FROM consolidated_hotspot_members chm
+            JOIN hotspots h ON h.hotspot_id = chm.hotspot_id
+            """,
+            conn,
+        )
+        # Attach a region to each consolidated hotspot — the most common region
+        # among its members (members are within ~1.5 km, so usually unanimous).
+        if not consolidated_hotspots.empty and not consolidated_members.empty:
+            region_per_cid = (
+                consolidated_members.groupby("consolidated_id")["region"]
+                .agg(
+                    lambda s: s.dropna().mode().iat[0]
+                    if not s.dropna().empty
+                    else None
+                )
+            )
+            consolidated_hotspots["region"] = consolidated_hotspots[
+                "consolidated_id"
+            ].map(region_per_cid)
+        else:
+            consolidated_hotspots["region"] = None
+        # MAX(last_seen) is fine for ISO-formatted strings; same for how_many.
+        consolidated_targets = pd.read_sql_query(
+            """
+            SELECT chm.consolidated_id, t.species_code, x.common_name, t.is_rare,
+                   MAX(ho.last_seen) AS last_seen,
+                   MAX(ho.how_many)  AS how_many,
+                   s.image_url, s.wiki_url
+            FROM consolidated_hotspot_members chm
+            JOIN hotspot_obs ho ON ho.hotspot_id = chm.hotspot_id
+            JOIN targets t ON t.species_code = ho.species_code
+            JOIN taxonomy x ON x.species_code = t.species_code
+            LEFT JOIN species_info s ON s.species_code = t.species_code
+            GROUP BY chm.consolidated_id, t.species_code
+            ORDER BY t.is_rare DESC, last_seen DESC
+            """,
+            conn,
+        )
     return {
         "targets": targets,
         "hotspots": hotspots,
         "hotspot_targets": hotspot_targets,
         "seasonality": seasonality,
+        "consolidated_hotspots": consolidated_hotspots,
+        "consolidated_members": consolidated_members,
+        "consolidated_targets": consolidated_targets,
     }
 
 
 def _hotspot_url(hotspot_id: str) -> str:
     """URL that triggers the hotspot detail view via Streamlit query params."""
     return f"?hotspot={hotspot_id}"
+
+
+def _consolidated_url(consolidated_id: str) -> str:
+    """URL that triggers the consolidated-hotspot detail view."""
+    return f"?consolidated={consolidated_id}"
 
 
 def _is_nan(v: object) -> bool:
@@ -233,6 +298,184 @@ def _popup_html(hotspot_id: str, name: str, hotspot_targets: pd.DataFrame) -> st
     )
 
 
+def _consolidated_tooltip_html(
+    name: str, target_count: int, rare_count: int, member_count: int
+) -> str:
+    rare_str = f" · {rare_count} rare" if rare_count else ""
+    plural = "s" if target_count != 1 else ""
+    return (
+        f"<div>"
+        f"<b>{name}</b>"
+        f"<div style='color:#666;font-size:11px;margin-top:2px;'>"
+        f"⊕ {member_count} hotspots · {target_count} unique target{plural}{rare_str}</div>"
+        f"</div>"
+    )
+
+
+def _consolidated_popup_html(
+    consolidated_id: str,
+    name: str,
+    member_rows: pd.DataFrame,
+    target_rows: pd.DataFrame,
+) -> str:
+    """Click popup for a consolidated hotspot.
+
+    Lists the original hotspots (each linking to its own detail page) and the
+    deduped target species across them.
+    """
+    members_html_parts: list[str] = []
+    if member_rows is not None and not member_rows.empty:
+        for _, m in member_rows.iterrows():
+            mname = m.get("name") or m["hotspot_id"]
+            href = _hotspot_url(m["hotspot_id"])
+            js_open = (
+                "event.preventDefault();"
+                f"var u=window.top.location.pathname+'?hotspot={m['hotspot_id']}';"
+                "window.open(u,'_blank');"
+            )
+            members_html_parts.append(
+                f"<li style='margin:1px 0;'>"
+                f"<a href='{href}' target='_blank' onclick=\"{js_open}\" "
+                f"style='color:#1f4f99;text-decoration:none;font-weight:500;'>"
+                f"{mname}</a></li>"
+            )
+    members_html = (
+        "<div style='margin-top:4px;'>"
+        "<div style='font-size:11px;color:#666;text-transform:uppercase;"
+        "letter-spacing:.05em;margin-bottom:2px;'>Includes</div>"
+        "<ul style='margin:0;padding-left:18px;font-size:12px;'>"
+        + "".join(members_html_parts)
+        + "</ul></div>"
+        if members_html_parts
+        else ""
+    )
+
+    target_html_parts: list[str] = []
+    if target_rows is not None and not target_rows.empty:
+        for _, t in target_rows.iterrows():
+            flag = " 🚨" if t["is_rare"] else ""
+            href = _ebird_species_url(t.get("species_code")) or _clean_str(t.get("wiki_url"))
+            if href:
+                link = (
+                    f'<a href="{href}" target="_blank" '
+                    f'style="color:#1f4f99;text-decoration:none;font-weight:500;">'
+                    f'{t["common_name"]}</a>'
+                )
+            else:
+                link = t["common_name"]
+            when = _days_ago(t.get("last_seen"))
+            when_html = (
+                f' <span style="color:#888;font-size:11px;">— {when}</span>' if when else ""
+            )
+            target_html_parts.append(
+                f"<li style='margin:1px 0;'>{link}{flag}{when_html}</li>"
+            )
+    targets_html = (
+        "<div style='max-height:280px;overflow-y:auto;margin-top:8px;padding-right:4px;'>"
+        "<div style='font-size:11px;color:#666;text-transform:uppercase;"
+        "letter-spacing:.05em;margin-bottom:2px;'>Unique species</div>"
+        "<ul style='margin:0;padding-left:18px;font-size:13px;'>"
+        + "".join(target_html_parts)
+        + "</ul></div>"
+        if target_html_parts
+        else "<div style='margin-top:8px;'><i style='color:#888;'>no targets here</i></div>"
+    )
+
+    js_open_title = (
+        "event.preventDefault();"
+        f"var u=window.top.location.pathname+'?consolidated={consolidated_id}';"
+        "window.open(u,'_blank');"
+    )
+    title = (
+        f'<a href="?consolidated={consolidated_id}" target="_blank" '
+        f'onclick="{js_open_title}" '
+        f'style="display:block;font-size:15px;font-weight:700;'
+        f'color:#1f4f99;text-decoration:none;line-height:1.3;'
+        f'word-break:break-word;white-space:normal;'
+        f'border-bottom:1px solid #e6ecf5;padding-bottom:6px;margin-bottom:4px;">'
+        f'⊕ {name} <span style="font-size:11px;font-weight:600;">↗</span></a>'
+    )
+    return (
+        f"<div style='min-width:240px;max-width:320px;'>{title}{members_html}{targets_html}</div>"
+    )
+
+
+# Region-preview hover: a tiny `components.html` iframe runs this script. The
+# folium iframe is wrapped by streamlit-folium's React frontend, which builds
+# the iframe DOM imperatively — inline `<script>` tags inside `root.html`
+# never execute. This iframe (created via `components.html`) IS parsed via
+# srcdoc, so its scripts do run. From here we reach `window.parent.document`
+# to find the chips and `parent.querySelector('iframe[title^=streamlit_folium]')
+# .contentWindow` to drive the folium map directly (same origin).
+# `__BBOXES__` is replaced with a JSON object
+# {region_key: [min_lat, min_lon, max_lat, max_lon]}.
+_REGION_PREVIEW_HTML_TEMPLATE = """
+<script>
+(function() {
+  var bboxes = __BBOXES__;
+  var rect = null;
+  function getFoliumWin() {
+    try {
+      var pdoc = window.parent && window.parent.document;
+      if (!pdoc) return null;
+      var iframe = pdoc.querySelector('iframe[title^="streamlit_folium"]');
+      if (!iframe || !iframe.contentWindow) return null;
+      return iframe.contentWindow;
+    } catch (e) { return null; }
+  }
+  function clearRect() {
+    var w = getFoliumWin();
+    if (rect && w && w.map) { try { w.map.removeLayer(rect); } catch(e){} }
+    rect = null;
+  }
+  function showRect(region) {
+    clearRect();
+    var bb = bboxes[region];
+    var w = getFoliumWin();
+    if (!bb || !w || !w.map || !w.L) return;
+    var bounds = [[bb[0], bb[1]], [bb[2], bb[3]]];
+    rect = w.L.rectangle(
+      bounds,
+      {color:'#1f4f99', weight:2, fillOpacity:0.08, dashArray:'6,4', interactive:false}
+    ).addTo(w.map);
+    // Pan/zoom so the rectangle is actually visible — when the user has
+    // multiple ingestion areas the default map center may be far away.
+    try {
+      w.map.flyToBounds(bounds, {padding:[40,40], duration:0.35, maxZoom:13});
+    } catch (e) {}
+  }
+  function attach() {
+    try {
+      var pdoc = window.parent && window.parent.document;
+      if (!pdoc) return;
+      var chips = pdoc.querySelectorAll('a[data-region]');
+      chips.forEach(function(chip) {
+        if (chip.dataset.onlybirdsBound === '1') return;
+        chip.dataset.onlybirdsBound = '1';
+        var key = chip.getAttribute('data-region');
+        chip.addEventListener('mouseenter', function() { showRect(key); });
+        chip.addEventListener('mouseleave', function() { clearRect(); });
+      });
+    } catch (e) {}
+  }
+  // Streamlit re-renders chip DOM on rerun; observe parent body so new chips
+  // get bound. Brief polling covers the cold-start case where parent.body
+  // isn't ready when the iframe first loads.
+  attach();
+  try {
+    var pdoc = window.parent && window.parent.document;
+    if (pdoc && pdoc.body) {
+      new MutationObserver(attach).observe(pdoc.body, {childList:true, subtree:true});
+    }
+  } catch (e) {}
+  var ticks = 0;
+  function tick() { ticks++; attach(); if (ticks < 50) setTimeout(tick, 100); }
+  tick();
+})();
+</script>
+"""
+
+
 # Color tiers: rare > many targets > some targets > one target > none.
 @dataclass(frozen=True)
 class _Tier:
@@ -283,6 +526,38 @@ def _marker_div_html(target_count: int, rare_count: int) -> tuple[str, int]:
         f"font-weight:700;font-size:{font_size}px;border:2px solid white;"
         f"box-shadow:0 0 0 4px rgba({tier.halo},0.32),0 1px 3px rgba(0,0,0,0.3);\">"
         f"{label}</div>"
+    )
+    return html, d
+
+
+def _consolidated_marker_html(
+    target_count: int, rare_count: int, member_count: int
+) -> tuple[str, int]:
+    """Square marker with a corner badge — visually distinct from singletons."""
+    tier = _tier_for(target_count, rare_count)
+    d = _marker_diameter(target_count, rare_count) + 2
+    if rare_count > 0:
+        label = f"🚨{target_count}" if target_count else "🚨"
+        font_size = 10
+    elif target_count > 0:
+        label = str(target_count)
+        font_size = 11 if d < 28 else 13
+    else:
+        label = "·"
+        font_size = 10
+    # Wrapper sized to the inner square so folium's icon_anchor centers correctly.
+    html = (
+        f"<div style=\"position:relative;width:{d}px;height:{d}px;\">"
+        f"<div style=\"background:{tier.fill};color:white;border-radius:7px;"
+        f"width:100%;height:100%;display:flex;align-items:center;justify-content:center;"
+        f"font-weight:700;font-size:{font_size}px;border:2px solid white;"
+        f"box-shadow:0 0 0 4px rgba({tier.halo},0.32),0 1px 3px rgba(0,0,0,0.3);\">"
+        f"{label}</div>"
+        f"<div style=\"position:absolute;top:-7px;right:-9px;background:white;color:#333;"
+        f"border-radius:9px;padding:1px 5px;font-size:9px;font-weight:700;"
+        f"border:1px solid #888;line-height:1.2;white-space:nowrap;\">"
+        f"⊕{member_count}</div>"
+        f"</div>"
     )
     return html, d
 
@@ -352,29 +627,161 @@ _LEGEND_HTML = """
 """
 
 
-def _top_hotspots_panel(hotspots: pd.DataFrame) -> None:
-    """Render a compact ranked list of best hotspots above the map."""
+def _region_label(region: str | None) -> str:
+    """Compact label for an eBird region code: 'US-CA-059' → 'CA-059'."""
+    if not region:
+        return "Other"
+    parts = region.split("-")
+    # Drop the country prefix when present (2-letter ISO code at the front).
+    if len(parts) >= 2 and len(parts[0]) == 2:
+        return "-".join(parts[1:])
+    return region
+
+
+def _region_chip_html(
+    label: str, url: str, active: bool, region_key: str | None = None
+) -> str:
+    bg = "#1f4f99" if active else "#eef3fb"
+    color = "white" if active else "#1f4f99"
+    # `data-region` is what the hover-preview JS looks for to draw the bbox
+    # outline on the map. Omitted on the "All regions" chip.
+    data_attr = f' data-region="{region_key}"' if region_key else ""
+    return (
+        f'<a href="{url}" target="_self"{data_attr} '
+        f'class="onlybirds-region-chip" '
+        f'style="background:{bg};color:{color};padding:4px 10px;border-radius:14px;'
+        f'font-size:12px;font-weight:600;margin-right:6px;display:inline-block;'
+        f'margin-bottom:4px;text-decoration:none;cursor:pointer;">'
+        f'{label}</a>'
+    )
+
+
+_REGION_NONE_SENTINEL = "__none__"
+
+
+def _region_bboxes(hotspots: pd.DataFrame) -> dict[str, list[float]]:
+    """Per-region bbox `[min_lat, min_lon, max_lat, max_lon]` from hotspot points.
+
+    Used by the chip-hover preview to outline where each region's hotspots sit
+    on the map. Hotspots with NULL/empty region land in the `_REGION_NONE_SENTINEL`
+    bucket so the "Other" chip can preview too.
+    """
     if hotspots.empty:
+        return {}
+    df = hotspots[["region", "lat", "lon"]].copy()
+    df["region"] = df["region"].fillna("").apply(
+        lambda r: r if r else _REGION_NONE_SENTINEL
+    )
+    out: dict[str, list[float]] = {}
+    for region, g in df.groupby("region"):
+        out[str(region)] = [
+            float(g["lat"].min()),
+            float(g["lon"].min()),
+            float(g["lat"].max()),
+            float(g["lon"].max()),
+        ]
+    return out
+
+
+def _parse_active_regions(qp_value: str | None) -> set[str]:
+    """`?region=A,B,C` → {"A","B","C"}. Empty/missing → empty set (= All)."""
+    if not qp_value:
+        return set()
+    return {r for r in (s.strip() for s in qp_value.split(",")) if r}
+
+
+def _toggle_region_url(active: set[str], key: str) -> str:
+    """URL that flips `key` in or out of the active set."""
+    new = active.symmetric_difference({key})
+    if not new:
+        return "./"
+    # Sort for stable URLs (so the same selection always has the same URL).
+    return "?region=" + ",".join(sorted(new))
+
+
+def _region_chips_panel(
+    singletons: pd.DataFrame, consolidated: pd.DataFrame, active: set[str]
+) -> None:
+    """Region filter strip. Click chip → ?region=A,B,C rerenders filtered."""
+    counts: dict[str, int] = {}
+    for df in (singletons, consolidated):
+        if df.empty or "region" not in df.columns:
+            continue
+        for r in df["region"]:
+            key = r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
+            counts[key] = counts.get(key, 0) + 1
+    # No point showing the strip if there's only one region in scope.
+    if len(counts) <= 1:
         return
-    scored = hotspots.assign(
-        _score=lambda d: d["rare_target_count"] * 10 + d["target_count"]
-    ).sort_values("_score", ascending=False)
-    top = scored[scored["_score"] > 0].head(5)
-    if top.empty:
+    chips: list[str] = [_region_chip_html("All regions", "./", not active)]
+    for key, n in sorted(counts.items(), key=lambda x: -x[1]):
+        is_active = key in active
+        label = (
+            f"Other ({n})"
+            if key == _REGION_NONE_SENTINEL
+            else f"{_region_label(key)} ({n})"
+        )
+        chips.append(
+            _region_chip_html(label, _toggle_region_url(active, key), is_active, region_key=key)
+        )
+    st.markdown(
+        "<div style='margin:-2px 0 8px 0;'>"
+        "<span style='color:#666;font-size:11px;font-weight:700;letter-spacing:.06em;"
+        "margin-right:8px;text-transform:uppercase;'>Region</span>"
+        + "".join(chips)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _top_hotspots_panel(
+    singletons: pd.DataFrame, consolidated: pd.DataFrame
+) -> None:
+    """Render a compact ranked list of best places (singletons + consolidated)."""
+    rows: list[dict] = []
+    if not singletons.empty:
+        for _, h in singletons.iterrows():
+            rows.append(
+                {
+                    "url": _hotspot_url(h["hotspot_id"]),
+                    "name": h["name"] or h["hotspot_id"],
+                    "target_count": int(h["target_count"] or 0),
+                    "rare_count": int(h["rare_target_count"] or 0),
+                    "is_consolidated": False,
+                }
+            )
+    if not consolidated.empty:
+        for _, c in consolidated.iterrows():
+            rows.append(
+                {
+                    "url": _consolidated_url(c["consolidated_id"]),
+                    "name": c["name"] or c["consolidated_id"],
+                    "target_count": int(c["target_count"] or 0),
+                    "rare_count": int(c["rare_target_count"] or 0),
+                    "is_consolidated": True,
+                }
+            )
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    df["_score"] = df["rare_count"] * 10 + df["target_count"]
+    df = df[df["_score"] > 0].sort_values("_score", ascending=False).head(5)
+    if df.empty:
         return
     chips = []
-    for _, h in top.iterrows():
-        rare = int(h["rare_target_count"])
-        tot = int(h["target_count"])
+    for _, r in df.iterrows():
+        rare = int(r["rare_count"])
+        tot = int(r["target_count"])
         bg = "#e74c3c" if rare else ("#1f4f99" if tot >= 5 else "#3498db")
         prefix = f"🚨{rare} · " if rare else ""
-        name = (h["name"] or h["hotspot_id"])[:48]
+        marker = "⊕ " if r["is_consolidated"] else ""
+        name = str(r["name"])[:48]
         chips.append(
-            f'<a href="{_hotspot_url(h["hotspot_id"])}" target="_self" '
+            f'<a href="{r["url"]}" target="_self" '
             f'style="background:{bg};color:white;padding:4px 10px;border-radius:14px;'
             f'font-size:12px;font-weight:600;margin-right:6px;display:inline-block;'
             f'margin-bottom:4px;text-decoration:none;cursor:pointer;">'
-            f'{prefix}{tot}× {name}</a>'
+            f'{prefix}{tot}× {marker}{name}</a>'
         )
     st.markdown(
         "<div style='margin:-4px 0 6px 0;'>"
@@ -389,25 +796,75 @@ def _top_hotspots_panel(hotspots: pd.DataFrame) -> None:
 def render_map(data: dict[str, pd.DataFrame]) -> None:
     hotspots = data["hotspots"]
     hotspot_targets = data["hotspot_targets"]
+    consolidated = data["consolidated_hotspots"]
+    consolidated_members = data["consolidated_members"]
+    consolidated_targets = data["consolidated_targets"]
     if hotspots.empty:
         st.info("No hotspots loaded yet — run `onlybirds run` first.")
         return
 
-    _top_hotspots_panel(hotspots)
+    # Hotspots that are members of a consolidation are hidden from the map —
+    # they appear under the consolidated marker's popup instead.
+    member_ids: set[str] = (
+        set(consolidated_members["hotspot_id"]) if not consolidated_members.empty else set()
+    )
+    singletons = hotspots[~hotspots["hotspot_id"].isin(member_ids)]
 
-    center = [hotspots["lat"].mean(), hotspots["lon"].mean()]
+    # Region filter: a chip strip above the top-hotspots strip. Active regions
+    # come from `?region=A,B,C` (multi-select) and narrow the map, the
+    # top-hotspots panel, and the bounds.
+    active_regions = _parse_active_regions(st.query_params.get("region"))
+    _region_chips_panel(singletons, consolidated, active_regions)
+    if active_regions:
+        none_active = _REGION_NONE_SENTINEL in active_regions
+        real_regions = active_regions - {_REGION_NONE_SENTINEL}
+
+        def _match(df: pd.DataFrame) -> pd.Series:
+            mask = pd.Series(False, index=df.index)
+            if real_regions:
+                mask = mask | df["region"].isin(real_regions)
+            if none_active:
+                mask = mask | df["region"].isna() | (df["region"] == "")
+            return mask
+
+        singletons = singletons[_match(singletons)]
+        consolidated = consolidated[_match(consolidated)]
+        # Keep member/target frames in sync so popups for the surviving
+        # consolidations still resolve correctly.
+        kept_cids = set(consolidated["consolidated_id"])
+        consolidated_members = consolidated_members[
+            consolidated_members["consolidated_id"].isin(kept_cids)
+        ]
+        consolidated_targets = consolidated_targets[
+            consolidated_targets["consolidated_id"].isin(kept_cids)
+        ]
+        if singletons.empty and consolidated.empty:
+            st.info("No hotspots in the selected regions.")
+            return
+
+    _top_hotspots_panel(singletons, consolidated)
+
+    # Compute center & bounds from the *filtered* set so the map zooms to the
+    # selected regions.
+    lats = list(singletons["lat"]) + list(consolidated["lat"])
+    lons = list(singletons["lon"]) + list(consolidated["lon"])
+    center = [sum(lats) / len(lats), sum(lons) / len(lons)]
     m = folium.Map(location=center, zoom_start=10, tiles="cartodbpositron")
+    if active_regions and len(lats) > 1:
+        m.fit_bounds(
+            [[min(lats), min(lons)], [max(lats), max(lons)]],
+            padding=(40, 40),
+        )
     cluster = MarkerCluster(icon_create_function=_CLUSTER_ICON_FN).add_to(m)
-    # Group once instead of filtering hotspot_targets per hotspot — avoids N² scan.
+    # Group once instead of filtering per hotspot — avoids N² scan.
     targets_by_hotspot = dict(tuple(hotspot_targets.groupby("hotspot_id", sort=False)))
     empty_targets = hotspot_targets.iloc[0:0]
-    for _, h in hotspots.iterrows():
+    for _, h in singletons.iterrows():
         rows = targets_by_hotspot.get(h["hotspot_id"], empty_targets)
         target_count = int(h["target_count"] or 0)
         rare_count = int(h["rare_target_count"] or 0)
         has_rare = rare_count > 0
         html, diameter = _marker_div_html(target_count, rare_count)
-        rare_str = f" · {rare_count} rare" if rare_count else ""
         name = h["name"] or h["hotspot_id"]
         tooltip = folium.Tooltip(_tooltip_html(name, target_count, rare_count))
         popup = folium.Popup(
@@ -427,12 +884,70 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
             has_rare=has_rare,
         ).add_to(cluster)
 
+    # Consolidated markers — squares with a member-count badge. Popup lists
+    # members + deduped species; title link goes to the consolidated detail
+    # page.
+    if not consolidated.empty:
+        members_by_cid = (
+            dict(tuple(consolidated_members.groupby("consolidated_id", sort=False)))
+            if not consolidated_members.empty
+            else {}
+        )
+        ctargets_by_cid = (
+            dict(tuple(consolidated_targets.groupby("consolidated_id", sort=False)))
+            if not consolidated_targets.empty
+            else {}
+        )
+        empty_members = consolidated_members.iloc[0:0]
+        empty_ctargets = consolidated_targets.iloc[0:0]
+        for _, c in consolidated.iterrows():
+            cid = c["consolidated_id"]
+            members = members_by_cid.get(cid, empty_members)
+            ctargets = ctargets_by_cid.get(cid, empty_ctargets)
+            target_count = int(c["target_count"] or 0)
+            rare_count = int(c["rare_target_count"] or 0)
+            member_count = int(c["member_count"] or 0)
+            has_rare = rare_count > 0
+            cons_html, cons_d = _consolidated_marker_html(
+                target_count, rare_count, member_count
+            )
+            name = c["name"] or cid
+            tooltip = folium.Tooltip(
+                _consolidated_tooltip_html(name, target_count, rare_count, member_count)
+            )
+            popup = folium.Popup(
+                _consolidated_popup_html(cid, name, members, ctargets),
+                max_width=340,
+            )
+            folium.Marker(
+                location=[c["lat"], c["lon"]],
+                tooltip=tooltip,
+                popup=popup,
+                icon=folium.DivIcon(
+                    html=cons_html,
+                    icon_size=(cons_d, cons_d),
+                    icon_anchor=(cons_d // 2, cons_d // 2),
+                    class_name="onlybirds-marker onlybirds-marker--consolidated",
+                ),
+                target_codes=ctargets["species_code"].tolist(),
+                has_rare=has_rare,
+            ).add_to(cluster)
+
     # Legend overlay sits inside the map container so it floats over the tiles.
     # `m.get_root()` returns folium's `Figure`, which has `.html` and `.header`
     # attributes at runtime. ty can't see them through folium's untyped surface,
     # hence the `ty: ignore`s below.
     root = m.get_root()
     root.html.add_child(folium.Element(_LEGEND_HTML))  # ty: ignore[unresolved-attribute]
+    # Region-preview rectangle on chip hover. Bboxes come from the *unfiltered*
+    # hotspot set so chips for regions outside the current filter still preview
+    # correctly.
+    #
+    # The actual hover handler is emitted via `components.html` *after* this
+    # function returns (see render_map's caller), since scripts injected into
+    # the folium iframe via `root.html`/`root.script` don't execute under
+    # streamlit-folium's React-based DOM construction.
+    bboxes = _region_bboxes(data["hotspots"])
     # Leaflet's default `.leaflet-tooltip` rule sets `white-space: nowrap`, so
     # long hotspot names overflow the map. Override inside the iframe so they
     # wrap at word boundaries up to a sensible max width. Avoid `word-break`
@@ -461,6 +976,16 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
         returned_objects=[],
         key="hotspot_map",
     )
+
+    # Region-preview hover handler. Emitted as a separate `components.html`
+    # iframe (which honors srcdoc and runs scripts) that reaches into the
+    # folium iframe's same-origin window to draw/remove the bbox rectangle
+    # on chip mouseenter/leave. Height=0 keeps it visually invisible.
+    if bboxes:
+        preview_html = _REGION_PREVIEW_HTML_TEMPLATE.replace(
+            "__BBOXES__", json.dumps(bboxes)
+        )
+        components.html(preview_html, height=0)
 
 
 def _months_for_species(seasonality: pd.DataFrame, species_code: str) -> set[int]:
@@ -615,11 +1140,16 @@ def _filter_target_rows(
     *,
     key_prefix: str,
     has_last_seen: bool,
+    region_options: list[str] | None = None,
 ) -> pd.DataFrame:
     """Render the filter/sort bar and return the filtered, sorted DataFrame.
 
     Expected columns on `df`: species_code, common_name, sci_name, is_rare,
     plus optionally `_last_seen` (ISO string) when has_last_seen=True.
+
+    When `region_options` is non-empty, also render a region multi-select
+    bound to the shared `?region=` URL param so it stays in sync with the
+    chip strip; the filtering itself happens upstream off the URL.
     """
     # Month-in-season filter: each option means "show species typically present
     # this month". The default ("Any month") doesn't filter by seasonality.
@@ -633,7 +1163,12 @@ def _filter_target_rows(
     if "hotspot_count" in df.columns:
         sort_choices += ["Most hotspots"]
 
-    cols = st.columns([3, 2, 2, 2, 2] if has_last_seen else [3, 2, 2, 2])
+    show_region = bool(region_options)
+    if show_region:
+        col_widths = [3, 3, 2, 2, 2, 2] if has_last_seen else [3, 3, 2, 2, 2]
+    else:
+        col_widths = [3, 2, 2, 2, 2] if has_last_seen else [3, 2, 2, 2]
+    cols = st.columns(col_widths)
     q_key = f"{key_prefix}_q"
     # Search input + a small × clear button. Streamlit's text_input is
     # `type="text"`, so the browser's native search-clear button won't show;
@@ -658,14 +1193,47 @@ def _filter_target_rows(
                 disabled=not q,
                 on_click=lambda k=q_key: st.session_state.update({k: ""}),
             )
-    with cols[1]:
+    next_col = 1
+    if show_region:
+        # Sync widget state from the URL (the chip strip's source of truth)
+        # before instantiating the multiselect, so chip clicks update the
+        # widget on the next rerun.
+        region_key = f"{key_prefix}_regions"
+        url_regions = _parse_active_regions(st.query_params.get("region"))
+        valid = [r for r in sorted(url_regions) if r in region_options]
+        if region_key not in st.session_state or set(
+            st.session_state[region_key]
+        ) != set(valid):
+            st.session_state[region_key] = valid
+
+        def _on_region_change(k: str = region_key) -> None:
+            sel = list(st.session_state.get(k, []))
+            if sel:
+                st.query_params["region"] = ",".join(sorted(sel))
+            elif "region" in st.query_params:
+                del st.query_params["region"]
+
+        with cols[next_col]:
+            st.multiselect(
+                "Regions",
+                options=region_options,
+                key=region_key,
+                on_change=_on_region_change,
+                format_func=lambda r: (
+                    "Other" if r == _REGION_NONE_SENTINEL else _region_label(r)
+                ),
+                placeholder="All regions",
+                label_visibility="collapsed",
+            )
+        next_col += 1
+    with cols[next_col]:
         rarity = st.selectbox(
             "Rarity",
             ["All birds", "Rare only", "Common only"],
             key=f"{key_prefix}_rarity",
             label_visibility="collapsed",
         )
-    with cols[2]:
+    with cols[next_col + 1]:
         month = st.selectbox(
             "Month",
             months_labels,
@@ -674,14 +1242,14 @@ def _filter_target_rows(
             label_visibility="collapsed",
         )
     if has_last_seen:
-        with cols[3]:
+        with cols[next_col + 2]:
             window = st.selectbox(
                 "Last seen",
                 list(_LAST_SEEN_WINDOWS.keys()),
                 key=f"{key_prefix}_window",
                 label_visibility="collapsed",
             )
-        with cols[4]:
+        with cols[next_col + 3]:
             sort = st.selectbox(
                 "Sort",
                 sort_choices,
@@ -690,7 +1258,7 @@ def _filter_target_rows(
             )
     else:
         window = "Any time"
-        with cols[3]:
+        with cols[next_col + 2]:
             sort = st.selectbox(
                 "Sort",
                 sort_choices,
@@ -767,13 +1335,35 @@ def _hotspots_by_species(data: dict[str, pd.DataFrame]) -> dict[str, pd.DataFram
 def render_targets(data: dict[str, pd.DataFrame]) -> None:
     targets = data["targets"]
     seasonality = data["seasonality"]
+    hotspots = data["hotspots"]
     if targets.empty:
         st.warning("No target birds yet. Run the pipeline.")
         return
 
+    # Region filter: shares `?region=` with the map view, so toggles persist
+    # across tabs. Counts on chips reflect hotspots in scope, not species.
+    active_regions = _parse_active_regions(st.query_params.get("region"))
+    _region_chips_panel(hotspots, hotspots.iloc[0:0], active_regions)
+
+    ht = data["hotspot_targets"]
+    if active_regions:
+        none_active = _REGION_NONE_SENTINEL in active_regions
+        real_regions = active_regions - {_REGION_NONE_SENTINEL}
+        h_mask = pd.Series(False, index=hotspots.index)
+        if real_regions:
+            h_mask = h_mask | hotspots["region"].isin(real_regions)
+        if none_active:
+            h_mask = h_mask | hotspots["region"].isna() | (hotspots["region"] == "")
+        kept_hids = set(hotspots[h_mask]["hotspot_id"])
+        ht = ht[ht["hotspot_id"].isin(kept_hids)]
+        codes_in_region = set(ht["species_code"]) if not ht.empty else set()
+        targets = targets[targets["species_code"].isin(codes_in_region)]
+        if targets.empty:
+            st.info("No target species in the selected regions.")
+            return
+
     # Enrich each target with the most recent observation date across all
     # hotspots, so the filter bar can sort/filter by "last seen" globally.
-    ht = data["hotspot_targets"]
     enriched = targets.copy()
     if not ht.empty and "last_seen" in ht.columns:
         last_by_code = ht.groupby("species_code")["last_seen"].max()
@@ -781,8 +1371,27 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
     else:
         enriched["_last_seen"] = ""
 
+    # Region multiselect options: every distinct region across all hotspots
+    # (not the post-filter set), ordered by descending hotspot count so the
+    # most populated regions surface first. `__none__` represents hotspots
+    # with no region. Same scope as the chip strip.
+    region_counts: dict[str, int] = {}
+    if "region" in hotspots.columns:
+        for r in hotspots["region"]:
+            key = r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
+            region_counts[key] = region_counts.get(key, 0) + 1
+    region_options = (
+        sorted(region_counts.keys(), key=lambda k: (-region_counts[k], k))
+        if len(region_counts) > 1
+        else []
+    )
+
     filtered = _filter_target_rows(
-        enriched, seasonality, key_prefix="targets", has_last_seen=True
+        enriched,
+        seasonality,
+        key_prefix="targets",
+        has_last_seen=True,
+        region_options=region_options,
     )
     total_rare = int((targets["is_rare"] == 1).sum())
     shown_rare = int((filtered["is_rare"] == 1).sum())
@@ -803,6 +1412,194 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
             seasonality,
             current_month,
             last_seen=last_seen,
+            hotspots_for_species=by_species.get(row["species_code"]),
+        )
+
+
+def _detail_location_map(
+    points: list[dict],
+    *,
+    height: int = 280,
+    zoom: int = 14,
+    highlight_id: str | None = None,
+) -> None:
+    """Compact location map for detail pages.
+
+    `points` is a list of {hotspot_id, name, lat, lon}. A single point centers
+    on it; multiple points fit-bounds the map. Markers link to each hotspot's
+    detail page (``target="_top"`` so the link escapes the components iframe).
+    Embedded via ``components.html`` to bypass the global streamlit_folium
+    ``min-height: 78vh`` CSS that's tuned for the main map.
+    """
+    if not points:
+        return
+    lats = [float(p["lat"]) for p in points]
+    lons = [float(p["lon"]) for p in points]
+    center = [sum(lats) / len(lats), sum(lons) / len(lons)]
+    m = folium.Map(location=center, zoom_start=zoom, tiles="cartodbpositron")
+    if len(points) > 1:
+        m.fit_bounds(
+            [[min(lats), min(lons)], [max(lats), max(lons)]],
+            padding=(30, 30),
+        )
+    for p in points:
+        hid = p["hotspot_id"]
+        name = p.get("name") or hid
+        is_highlight = highlight_id is not None and hid == highlight_id
+        href = _hotspot_url(hid)
+        popup_html = (
+            "<div style='font-family:ui-sans-serif,system-ui,sans-serif;"
+            "min-width:160px;'>"
+            f"<a href='{href}' target='_top' "
+            "style='font-weight:700;color:#1f4f99;text-decoration:none;'>"
+            f"{name}</a></div>"
+        )
+        folium.Marker(
+            location=[float(p["lat"]), float(p["lon"])],
+            popup=folium.Popup(popup_html, max_width=240),
+            tooltip=name,
+            icon=folium.Icon(
+                color="red" if is_highlight else "blue",
+                icon="binoculars",
+                prefix="fa",
+            ),
+        ).add_to(m)
+    components.html(m.get_root().render(), height=height, scrolling=False)
+
+
+def render_consolidated_detail(
+    consolidated_id: str, data: dict[str, pd.DataFrame]
+) -> None:
+    """Detail view for a consolidated hotspot: deduped species across members."""
+    consolidated = data["consolidated_hotspots"]
+    match = consolidated[consolidated["consolidated_id"] == consolidated_id]
+    if match.empty:
+        st.error(f"Consolidated hotspot `{consolidated_id}` not found.")
+        st.markdown("[← Back to map](./)")
+        return
+    c = match.iloc[0]
+
+    members = data["consolidated_members"]
+    members = members[members["consolidated_id"] == consolidated_id]
+
+    back_col, title_col = st.columns([1, 9])
+    with back_col:
+        st.markdown(
+            "<a href='./' target='_self' "
+            "style='display:inline-block;padding:6px 12px;border-radius:8px;"
+            "background:#f0f2f6;color:#222;text-decoration:none;font-weight:600;'>"
+            "← Map</a>",
+            unsafe_allow_html=True,
+        )
+    with title_col:
+        target_count = int(c["target_count"] or 0)
+        rare_count = int(c["rare_target_count"] or 0)
+        member_count = int(c["member_count"] or 0)
+        rare_badge = (
+            f"<span style='background:#e74c3c;color:white;padding:2px 8px;"
+            f"border-radius:10px;font-size:12px;font-weight:700;margin-left:8px;'>"
+            f"🚨 {rare_count} rare</span>"
+            if rare_count
+            else ""
+        )
+        cons_badge = (
+            f"<span style='background:#1f4f99;color:white;padding:2px 8px;"
+            f"border-radius:10px;font-size:12px;font-weight:700;margin-left:8px;'>"
+            f"⊕ {member_count} hotspots</span>"
+        )
+        st.markdown(
+            f"<h2 style='margin:0;'>{c['name'] or consolidated_id}{cons_badge}{rare_badge}</h2>"
+            f"<div style='color:#666;font-size:13px;margin-top:2px;'>"
+            f"{target_count} unique target species · "
+            f"<a href='https://www.google.com/maps/search/?api=1&query={c['lat']},{c['lon']}' "
+            f"target='_blank' style='color:#1f4f99;text-decoration:none;'>open area in Maps ↗</a>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    st.divider()
+
+    # Location map — every member hotspot, fit-bounded.
+    if not members.empty and {"lat", "lon"}.issubset(members.columns):
+        member_pts = [
+            {
+                "hotspot_id": mm["hotspot_id"],
+                "name": mm.get("name") or mm["hotspot_id"],
+                "lat": mm["lat"],
+                "lon": mm["lon"],
+            }
+            for _, mm in members.iterrows()
+            if pd.notna(mm.get("lat")) and pd.notna(mm.get("lon"))
+        ]
+        _detail_location_map(member_pts, height=320)
+
+    # Member hotspot list — link to each individual detail page.
+    if not members.empty:
+        st.markdown("**Member hotspots**")
+        items = []
+        for _, m in members.iterrows():
+            mname = m.get("name") or m["hotspot_id"]
+            items.append(
+                f"<li style='margin:2px 0;'>"
+                f"<a href='{_hotspot_url(m['hotspot_id'])}' target='_self' "
+                f"style='color:#1f4f99;text-decoration:none;font-weight:600;'>"
+                f"{mname}</a> "
+                f"<span style='color:#888;font-size:11px;'>({m['hotspot_id']})</span>"
+                f"</li>"
+            )
+        st.markdown(
+            "<ul style='margin:4px 0 12px 0;padding-left:18px;'>"
+            + "".join(items)
+            + "</ul>",
+            unsafe_allow_html=True,
+        )
+
+    # Deduped target species across all members. Rebuild from the full targets
+    # table so we get every metadata column (sci_name, family, summary…).
+    here = data["consolidated_targets"]
+    here = here[here["consolidated_id"] == consolidated_id]
+    if here.empty:
+        st.info("No target species recorded across these hotspots yet.")
+        return
+
+    obs_by_code = {
+        r["species_code"]: (r.get("last_seen"), r.get("how_many"))
+        for _, r in here.iterrows()
+    }
+    targets = data["targets"]
+    species_codes = set(here["species_code"])
+    filtered = targets[targets["species_code"].isin(species_codes)].copy()
+    if filtered.empty:
+        st.caption(
+            f"{len(here)} species observed across these hotspots "
+            f"(full target metadata unavailable)."
+        )
+        return
+    filtered["_last_seen"] = filtered["species_code"].map(
+        lambda code: obs_by_code.get(code, (None, None))[0] or ""
+    )
+    sorted_filtered = _filter_target_rows(
+        filtered,
+        data["seasonality"],
+        key_prefix=f"consolidated_{consolidated_id}",
+        has_last_seen=True,
+    )
+    st.caption(
+        f"showing {len(sorted_filtered)} of {len(filtered)} unique target species "
+        f"across {member_count} hotspots"
+    )
+    if sorted_filtered.empty:
+        st.info("No targets match these filters.")
+        return
+    by_species = _hotspots_by_species(data)
+    current_month = dt.date.today().month
+    for _, row in sorted_filtered.iterrows():
+        last_seen, how_many = obs_by_code.get(row["species_code"], (None, None))
+        _render_target_card(
+            row,
+            data["seasonality"],
+            current_month,
+            last_seen=last_seen,
+            how_many=how_many,
             hotspots_for_species=by_species.get(row["species_code"]),
         )
 
@@ -849,6 +1646,21 @@ def render_hotspot_detail(hotspot_id: str, data: dict[str, pd.DataFrame]) -> Non
             unsafe_allow_html=True,
         )
     st.divider()
+
+    # Location map — single marker at this hotspot.
+    if pd.notna(h.get("lat")) and pd.notna(h.get("lon")):
+        _detail_location_map(
+            [
+                {
+                    "hotspot_id": hotspot_id,
+                    "name": h.get("name") or hotspot_id,
+                    "lat": h["lat"],
+                    "lon": h["lon"],
+                }
+            ],
+            height=280,
+            highlight_id=hotspot_id,
+        )
 
     # Filter targets to species seen at this hotspot
     here = data["hotspot_targets"]
@@ -985,7 +1797,11 @@ def main() -> None:
 
     data = load_data(args.db)
 
-    # Routing: ?hotspot=<id> shows the per-hotspot detail view.
+    # Routing: ?hotspot=<id> or ?consolidated=<id> for detail views.
+    consolidated_id = st.query_params.get("consolidated")
+    if consolidated_id:
+        render_consolidated_detail(consolidated_id, data)
+        return
     hotspot_id = st.query_params.get("hotspot")
     if hotspot_id:
         render_hotspot_detail(hotspot_id, data)

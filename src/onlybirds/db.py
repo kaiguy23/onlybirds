@@ -74,6 +74,23 @@ CREATE TABLE IF NOT EXISTS species_seasonality (
     PRIMARY KEY (species_code, region)
 );
 CREATE INDEX IF NOT EXISTS idx_seasonality_species ON species_seasonality(species_code);
+
+CREATE TABLE IF NOT EXISTS consolidated_hotspots (
+    consolidated_id TEXT PRIMARY KEY,
+    name            TEXT,
+    lat             REAL NOT NULL,
+    lon             REAL NOT NULL,
+    member_count    INTEGER NOT NULL,
+    fetched_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS consolidated_hotspot_members (
+    consolidated_id TEXT NOT NULL,
+    hotspot_id      TEXT NOT NULL,
+    PRIMARY KEY (consolidated_id, hotspot_id),
+    FOREIGN KEY (consolidated_id) REFERENCES consolidated_hotspots(consolidated_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chm_hotspot ON consolidated_hotspot_members(hotspot_id);
 """
 
 
