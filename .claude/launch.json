@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "streamlit",
+      "runtimeExecutable": "sleep",
+      "runtimeArgs": ["86400"],
+      "port": 8501
+    }
+  ]
+}

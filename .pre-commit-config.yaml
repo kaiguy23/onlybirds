@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      # ty is pre-1.0 — bypass with `git commit --no-verify` when it false-positives.
+      - id: ty
+        name: ty type check
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
