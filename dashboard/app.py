@@ -690,6 +690,21 @@ def _parse_active_regions(qp_value: str | None) -> set[str]:
     return {r for r in (s.strip() for s in qp_value.split(",")) if r}
 
 
+def _region_mask(df: pd.DataFrame, active: set[str]) -> pd.Series:
+    """Boolean mask of rows whose `region` is in the active set.
+
+    The `_REGION_NONE_SENTINEL` member matches rows with NULL/empty region.
+    """
+    none_active = _REGION_NONE_SENTINEL in active
+    real = active - {_REGION_NONE_SENTINEL}
+    mask = pd.Series(False, index=df.index)
+    if real:
+        mask = mask | df["region"].isin(real)
+    if none_active:
+        mask = mask | df["region"].isna() | (df["region"] == "")
+    return mask
+
+
 def _toggle_region_url(active: set[str], key: str) -> str:
     """URL that flips `key` in or out of the active set."""
     new = active.symmetric_difference({key})
@@ -816,19 +831,8 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
     active_regions = _parse_active_regions(st.query_params.get("region"))
     _region_chips_panel(singletons, consolidated, active_regions)
     if active_regions:
-        none_active = _REGION_NONE_SENTINEL in active_regions
-        real_regions = active_regions - {_REGION_NONE_SENTINEL}
-
-        def _match(df: pd.DataFrame) -> pd.Series:
-            mask = pd.Series(False, index=df.index)
-            if real_regions:
-                mask = mask | df["region"].isin(real_regions)
-            if none_active:
-                mask = mask | df["region"].isna() | (df["region"] == "")
-            return mask
-
-        singletons = singletons[_match(singletons)]
-        consolidated = consolidated[_match(consolidated)]
+        singletons = singletons[_region_mask(singletons, active_regions)]
+        consolidated = consolidated[_region_mask(consolidated, active_regions)]
         # Keep member/target frames in sync so popups for the surviving
         # consolidations still resolve correctly.
         kept_cids = set(consolidated["consolidated_id"])
@@ -1347,14 +1351,7 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
 
     ht = data["hotspot_targets"]
     if active_regions:
-        none_active = _REGION_NONE_SENTINEL in active_regions
-        real_regions = active_regions - {_REGION_NONE_SENTINEL}
-        h_mask = pd.Series(False, index=hotspots.index)
-        if real_regions:
-            h_mask = h_mask | hotspots["region"].isin(real_regions)
-        if none_active:
-            h_mask = h_mask | hotspots["region"].isna() | (hotspots["region"] == "")
-        kept_hids = set(hotspots[h_mask]["hotspot_id"])
+        kept_hids = set(hotspots[_region_mask(hotspots, active_regions)]["hotspot_id"])
         ht = ht[ht["hotspot_id"].isin(kept_hids)]
         codes_in_region = set(ht["species_code"]) if not ht.empty else set()
         targets = targets[targets["species_code"].isin(codes_in_region)]
@@ -1373,8 +1370,7 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
 
     # Region multiselect options: every distinct region across all hotspots
     # (not the post-filter set), ordered by descending hotspot count so the
-    # most populated regions surface first. `__none__` represents hotspots
-    # with no region. Same scope as the chip strip.
+    # most populated regions surface first. Same scope as the chip strip.
     region_counts: dict[str, int] = {}
     if "region" in hotspots.columns:
         for r in hotspots["region"]:
