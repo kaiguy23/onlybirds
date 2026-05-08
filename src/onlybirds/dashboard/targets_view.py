@@ -443,7 +443,23 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
     if filtered.empty:
         st.info("No targets match these filters.")
         return
-    by_species = _hotspots_by_species(data)
+    # Honor the active "Last seen" window when building the per-species hotspot
+    # list — otherwise the expander leaks hotspots whose obs predate the cutoff.
+    # The widget key matches `_filter_target_rows`'s key_prefix ("targets").
+    window_label = st.session_state.get("targets_window", "Any time")
+    window_days = _LAST_SEEN_WINDOWS.get(window_label)
+    ht_for_lookup = ht
+    if window_days is not None and not ht_for_lookup.empty:
+        cutoff = dt.date.today() - dt.timedelta(days=window_days)
+
+        def _in_window(v: object) -> bool:
+            d = _parse_iso_date(v)
+            return d is not None and d >= cutoff
+
+        ht_for_lookup = ht_for_lookup[ht_for_lookup["last_seen"].apply(_in_window)]
+    by_species = _hotspots_by_species(
+        {**data, "hotspot_targets": ht_for_lookup}
+    )
     current_month = dt.date.today().month
     for _, row in filtered.iterrows():
         # Surface the species' freshest sighting on its card.
