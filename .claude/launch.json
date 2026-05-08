@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "streamlit",
-      "runtimeExecutable": "sleep",
-      "runtimeArgs": ["86400"],
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "streamlit", "run", "dashboard/app.py", "--server.port", "8501", "--server.headless", "true", "--", "--db", "data/onlybirds.db"],
       "port": 8501
     }
   ]
