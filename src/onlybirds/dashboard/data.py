@@ -1,13 +1,26 @@
 """Load all dashboard data from the SQLite onlybirds DB."""
 
+from dataclasses import dataclass
+
 import pandas as pd
 import streamlit as st
 
 from onlybirds import db
 
 
+@dataclass(frozen=True, slots=True)
+class DashboardData:
+    targets: pd.DataFrame
+    hotspots: pd.DataFrame
+    hotspot_targets: pd.DataFrame
+    seasonality: pd.DataFrame
+    consolidated_hotspots: pd.DataFrame
+    consolidated_members: pd.DataFrame
+    consolidated_targets: pd.DataFrame
+
+
 @st.cache_data(ttl=60)
-def load_data(db_path: str) -> dict[str, pd.DataFrame]:
+def load_data(db_path: str) -> DashboardData:
     with db.session(db_path) as conn:
         targets = pd.read_sql_query(
             """
@@ -115,12 +128,12 @@ def load_data(db_path: str) -> dict[str, pd.DataFrame]:
             """,
             conn,
         )
-    return {
-        "targets": targets,
-        "hotspots": hotspots,
-        "hotspot_targets": hotspot_targets,
-        "seasonality": seasonality,
-        "consolidated_hotspots": consolidated_hotspots,
-        "consolidated_members": consolidated_members,
-        "consolidated_targets": consolidated_targets,
-    }
+    return DashboardData(
+        targets=targets,
+        hotspots=hotspots,
+        hotspot_targets=hotspot_targets,
+        seasonality=seasonality,
+        consolidated_hotspots=consolidated_hotspots,
+        consolidated_members=consolidated_members,
+        consolidated_targets=consolidated_targets,
+    )

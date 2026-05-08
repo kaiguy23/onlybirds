@@ -17,6 +17,7 @@ from onlybirds.dashboard.compare import (
     _render_compare_tray,
 )
 from onlybirds.dashboard.compare_client import render_top_hotspots_strip
+from onlybirds.dashboard.data import DashboardData
 from onlybirds.dashboard.markers import (
     _CLUSTER_ICON_FN,
     _LEGEND_HTML,
@@ -96,12 +97,12 @@ def _top_hotspots_panel(
     render_top_hotspots_strip(rows_payload)
 
 
-def render_map(data: dict[str, pd.DataFrame]) -> None:
-    hotspots = data["hotspots"]
-    hotspot_targets = data["hotspot_targets"]
-    consolidated = data["consolidated_hotspots"]
-    consolidated_members = data["consolidated_members"]
-    consolidated_targets = data["consolidated_targets"]
+def render_map(data: DashboardData) -> None:
+    hotspots = data.hotspots
+    hotspot_targets = data.hotspot_targets
+    consolidated = data.consolidated_hotspots
+    consolidated_members = data.consolidated_members
+    consolidated_targets = data.consolidated_targets
     if hotspots.empty:
         st.info("No hotspots loaded yet — run `onlybirds run` first.")
         return
@@ -236,7 +237,7 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
     # Region-preview rectangle on chip hover. Bboxes come from the *unfiltered*
     # hotspot set so chips for regions outside the current filter still preview
     # correctly.
-    bboxes = _region_bboxes(data["hotspots"])
+    bboxes = _region_bboxes(data.hotspots)
     # Leaflet's default `.leaflet-tooltip` rule sets `white-space: nowrap`, so
     # long hotspot names overflow the map. Override inside the iframe so they
     # wrap at word boundaries up to a sensible max width. Avoid `word-break`
@@ -278,10 +279,10 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
 
 
 def render_consolidated_detail(
-    consolidated_id: str, data: dict[str, pd.DataFrame]
+    consolidated_id: str, data: DashboardData
 ) -> None:
     """Detail view for a consolidated hotspot: deduped species across members."""
-    consolidated = data["consolidated_hotspots"]
+    consolidated = data.consolidated_hotspots
     match = consolidated[consolidated["consolidated_id"] == consolidated_id]
     if match.empty:
         st.error(f"Consolidated hotspot `{consolidated_id}` not found.")
@@ -290,7 +291,7 @@ def render_consolidated_detail(
     c = match.iloc[0]
     _render_compare_tray(data)
 
-    members = data["consolidated_members"]
+    members = data.consolidated_members
     members = members[members["consolidated_id"] == consolidated_id]
 
     back_col, title_col = st.columns([1, 9])
@@ -393,7 +394,7 @@ def render_consolidated_detail(
 
     # Deduped target species across all members. Rebuild from the full targets
     # table so we get every metadata column (sci_name, family, summary…).
-    here = data["consolidated_targets"]
+    here = data.consolidated_targets
     here = here[here["consolidated_id"] == consolidated_id]
     if here.empty:
         st.info("No target species recorded across these hotspots yet.")
@@ -403,7 +404,7 @@ def render_consolidated_detail(
         r["species_code"]: (r.get("last_seen"), r.get("how_many"))
         for _, r in here.iterrows()
     }
-    targets = data["targets"]
+    targets = data.targets
     species_codes = set(here["species_code"])
     filtered = targets[targets["species_code"].isin(species_codes)].copy()
     if filtered.empty:
@@ -417,7 +418,7 @@ def render_consolidated_detail(
     )
     sorted_filtered = _filter_target_rows(
         filtered,
-        data["seasonality"],
+        data.seasonality,
         key_prefix=f"consolidated_{consolidated_id}",
         has_last_seen=True,
     )
@@ -434,7 +435,7 @@ def render_consolidated_detail(
         last_seen, how_many = obs_by_code.get(row["species_code"], (None, None))
         _render_target_card(
             row,
-            data["seasonality"],
+            data.seasonality,
             current_month,
             last_seen=last_seen,
             how_many=how_many,
@@ -442,9 +443,9 @@ def render_consolidated_detail(
         )
 
 
-def render_hotspot_detail(hotspot_id: str, data: dict[str, pd.DataFrame]) -> None:
+def render_hotspot_detail(hotspot_id: str, data: DashboardData) -> None:
     """Detail view for a single hotspot: header + filtered target cards."""
-    hotspots = data["hotspots"]
+    hotspots = data.hotspots
     match = hotspots[hotspots["hotspot_id"] == hotspot_id]
     if match.empty:
         st.error(f"Hotspot `{hotspot_id}` not found.")
@@ -503,7 +504,7 @@ def render_hotspot_detail(hotspot_id: str, data: dict[str, pd.DataFrame]) -> Non
         )
 
     # Filter targets to species seen at this hotspot
-    here = data["hotspot_targets"]
+    here = data.hotspot_targets
     here = here[here["hotspot_id"] == hotspot_id]
     if here.empty:
         st.info("No target species recorded at this hotspot yet.")
@@ -515,7 +516,7 @@ def render_hotspot_detail(hotspot_id: str, data: dict[str, pd.DataFrame]) -> Non
         for _, r in here.iterrows()
     }
 
-    targets = data["targets"]
+    targets = data.targets
     species_codes = set(here["species_code"])
     filtered = targets[targets["species_code"].isin(species_codes)].copy()
     if filtered.empty:
@@ -537,7 +538,7 @@ def render_hotspot_detail(hotspot_id: str, data: dict[str, pd.DataFrame]) -> Non
 
     sorted_filtered = _filter_target_rows(
         filtered,
-        data["seasonality"],
+        data.seasonality,
         key_prefix=f"hotspot_{hotspot_id}",
         has_last_seen=True,
     )
@@ -553,7 +554,7 @@ def render_hotspot_detail(hotspot_id: str, data: dict[str, pd.DataFrame]) -> Non
         last_seen, how_many = obs_by_code.get(row["species_code"], (None, None))
         _render_target_card(
             row,
-            data["seasonality"],
+            data.seasonality,
             current_month,
             last_seen=last_seen,
             how_many=how_many,

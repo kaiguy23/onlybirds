@@ -18,27 +18,27 @@ windows except the writer. Each component listens for it and re-renders.
 
 import json
 
-import pandas as pd
-import streamlit.components.v1 as components
+import streamlit as st
 
+from onlybirds.dashboard.data import DashboardData
 from onlybirds.dashboard.types import HotspotKind
 
 MAX_COMPARE = 6
 _STORAGE_KEY = "onlybirds.compare"
 
 
-def _all_metas_json(data: dict[str, pd.DataFrame]) -> str:
+def _all_metas_json(data: DashboardData) -> str:
     """All hotspot/consolidated IDs → display metadata, as JSON for JS."""
     out: dict[str, dict] = {}
-    h = data.get("hotspots")
-    if h is not None and not h.empty:
+    h = data.hotspots
+    if not h.empty:
         for _, r in h.iterrows():
             out[r["hotspot_id"]] = {
                 "name": (r.get("name") or r["hotspot_id"])[:36],
                 "kind": HotspotKind.HOTSPOT,
             }
-    c = data.get("consolidated_hotspots")
-    if c is not None and not c.empty:
+    c = data.consolidated_hotspots
+    if not c.empty:
         for _, r in c.iterrows():
             out[r["consolidated_id"]] = {
                 "name": (r.get("name") or r["consolidated_id"])[:36],
@@ -228,14 +228,14 @@ syncHeight();
 """
 
 
-def render_tray(data: dict[str, pd.DataFrame], *, on_compare_view: bool = False) -> None:
+def render_tray(data: DashboardData, *, on_compare_view: bool = False) -> None:
     """Render the chip tray as a localStorage-driven iframe."""
     html = _TRAY_HTML.format(
         lib_js=_LIB_JS,
         metas_json=_all_metas_json(data),
         on_compare_view=str(on_compare_view).lower(),
     )
-    components.html(html, height=60)
+    st.iframe(html, height=60)
 
 
 def render_pill(item_id: str, kind: HotspotKind = HotspotKind.HOTSPOT) -> None:
@@ -244,7 +244,7 @@ def render_pill(item_id: str, kind: HotspotKind = HotspotKind.HOTSPOT) -> None:
         lib_js=_LIB_JS,
         item_json=json.dumps({"id": item_id, "kind": kind}),
     )
-    components.html(html, height=44)
+    st.iframe(html, height=44)
 
 
 _TOP_STRIP_HTML = """
@@ -324,7 +324,7 @@ def render_top_hotspots_strip(rows: list[dict]) -> None:
         lib_js=_LIB_JS,
         rows_json=json.dumps(rows),
     )
-    components.html(html, height=80)
+    st.iframe(html, height=80)
 
 
 def popup_pill_html(item_id: str, *, size: str = "md") -> str:

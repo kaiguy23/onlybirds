@@ -8,8 +8,8 @@ from enum import Enum
 import altair as alt
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
+from onlybirds.dashboard.data import DashboardData
 from onlybirds.dashboard.compare_client import (
     popup_pill_html,
     render_pill,
@@ -68,10 +68,10 @@ def _is_consolidated_id(item_id: str) -> bool:
 
 
 def _compare_item_meta(
-    item_id: str, data: dict[str, pd.DataFrame]
+    item_id: str, data: DashboardData
 ) -> CompareItemMeta | None:
     if _is_consolidated_id(item_id):
-        c = data["consolidated_hotspots"]
+        c = data.consolidated_hotspots
         m = c[c["consolidated_id"] == item_id]
         if m.empty:
             return None
@@ -86,7 +86,7 @@ def _compare_item_meta(
             rare_count=int(r.get("rare_target_count") or 0),
             url=_consolidated_url(item_id),
         )
-    h = data["hotspots"]
+    h = data.hotspots
     m = h[h["hotspot_id"] == item_id]
     if m.empty:
         return None
@@ -104,7 +104,7 @@ def _compare_item_meta(
 
 
 def _render_compare_tray(
-    data: dict[str, pd.DataFrame], *, on_compare_view: bool = False
+    data: DashboardData, *, on_compare_view: bool = False
 ) -> None:
     """Sticky chip strip showing the current compare selection.
 
@@ -132,14 +132,14 @@ def _compare_toggle_button(item_id: str, *, key: str) -> None:
 
 
 def _compare_species_at_item(
-    item_id: str, data: dict[str, pd.DataFrame]
+    item_id: str, data: DashboardData
 ) -> dict[str, dict]:
     """Map species_code -> {last_seen, how_many, is_rare} for one compare item."""
     if _is_consolidated_id(item_id):
-        df = data["consolidated_targets"]
+        df = data.consolidated_targets
         df = df[df["consolidated_id"] == item_id]
     else:
-        df = data["hotspot_targets"]
+        df = data.hotspot_targets
         df = df[df["hotspot_id"] == item_id]
     out: dict[str, dict] = {}
     for _, r in df.iterrows():
@@ -194,7 +194,7 @@ def _presence_strip_html(
     )
 
 
-def render_compare(data: dict[str, pd.DataFrame]) -> None:
+def render_compare(data: DashboardData) -> None:
     """Side-by-side compare of selected hotspots/consolidations."""
     current = _compare_ids()
     # Deep links arrive with `?compare=` populated but localStorage empty;
@@ -210,7 +210,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             "window.top.dispatchEvent(new CustomEvent('onlybirds:compare',{detail:v.split(',')}));"
             "}}catch(e){}</script>"
         )
-        components.html(sync_js, height=0)
+        st.iframe(sync_js, height=0)
     metas_all = [m for m in (_compare_item_meta(i, data) for i in current) if m]
     if len(metas_all) < 2:
         st.info(
@@ -375,7 +375,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     st.divider()
 
     # Build a target frame for the union, with _last_seen = MAX across active items.
-    targets = data["targets"]
+    targets = data.targets
     union_df = targets[targets["species_code"].isin(union_codes)].copy()
     if union_df.empty:
         st.info("No target species recorded at any of the selected hotspots.")
@@ -404,7 +404,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
 
     sorted_union = _filter_target_rows(
         scoped_df,
-        data["seasonality"],
+        data.seasonality,
         key_prefix=f"compare_{','.join(current)}",
         has_last_seen=True,
     )
@@ -503,7 +503,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     )
     st.altair_chart(
         chart,
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         key=chart_key,
     )
@@ -609,7 +609,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             )
             _render_target_card(
                 row,
-                data["seasonality"],
+                data.seasonality,
                 current_month,
                 last_seen=(sp_meta.get("last_seen") if sp_meta else None),
                 how_many=(sp_meta.get("how_many") if sp_meta else None),
@@ -654,7 +654,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
                     sp_meta = species_at[m.id].get(row["species_code"], {})
                     _render_target_card(
                         row,
-                        data["seasonality"],
+                        data.seasonality,
                         current_month,
                         last_seen=sp_meta.get("last_seen"),
                         how_many=sp_meta.get("how_many"),

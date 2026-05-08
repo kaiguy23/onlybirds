@@ -1,6 +1,7 @@
 """Target species rendering: target cards, the filter/sort bar, target list page."""
 
 import calendar
+import dataclasses
 import datetime as dt
 import json
 from collections import Counter
@@ -23,6 +24,7 @@ class RarityFilter(str, Enum):
     RARE_ONLY = "Rare only"
     COMMON_ONLY = "Common only"
 
+from onlybirds.dashboard.data import DashboardData
 from onlybirds.dashboard.regions import (
     _REGION_NONE_SENTINEL,
     _parse_active_regions,
@@ -131,7 +133,7 @@ def _render_target_card(
     with cols[0]:
         img = _clean_str(row.get("image_url"))
         if img:
-            st.image(img, use_container_width=True)
+            st.image(img, width="stretch")
     with cols[1]:
         badge = " 🚨 **RARE**" if row["is_rare"] else ""
         st.markdown(f"### {row['common_name']}{badge}")
@@ -384,23 +386,23 @@ def _filter_target_rows(
     return out
 
 
-def _hotspots_by_species(data: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def _hotspots_by_species(data: DashboardData) -> dict[str, pd.DataFrame]:
     """Group hotspot_targets by species_code and join in hotspot names."""
-    ht = data["hotspot_targets"]
+    ht = data.hotspot_targets
     if ht.empty:
         return {}
     named = ht.merge(
-        data["hotspots"][["hotspot_id", "name"]], on="hotspot_id", how="left"
+        data.hotspots[["hotspot_id", "name"]], on="hotspot_id", how="left"
     )
     # `groupby` returns `Hashable` keys generically — species_code is always
     # a string, so cast for the type signature.
     return {str(code): group for code, group in named.groupby("species_code")}
 
 
-def render_targets(data: dict[str, pd.DataFrame]) -> None:
-    targets = data["targets"]
-    seasonality = data["seasonality"]
-    hotspots = data["hotspots"]
+def render_targets(data: DashboardData) -> None:
+    targets = data.targets
+    seasonality = data.seasonality
+    hotspots = data.hotspots
     if targets.empty:
         st.warning("No target birds yet. Run the pipeline.")
         return
@@ -410,7 +412,7 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
     active_regions = _parse_active_regions(st.query_params.get("region"))
     _region_chips_panel(hotspots, hotspots.iloc[0:0], active_regions)
 
-    ht = data["hotspot_targets"]
+    ht = data.hotspot_targets
     if active_regions:
         kept_hids = set(hotspots[_region_mask(hotspots, active_regions)]["hotspot_id"])
         ht = ht[ht["hotspot_id"].isin(kept_hids)]
@@ -475,7 +477,7 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
 
         ht_for_lookup = ht_for_lookup[ht_for_lookup["last_seen"].apply(_in_window)]
     by_species = _hotspots_by_species(
-        {**data, "hotspot_targets": ht_for_lookup}
+        dataclasses.replace(data, hotspot_targets=ht_for_lookup)
     )
     current_month = dt.date.today().month
     for _, row in filtered.iterrows():
