@@ -1,11 +1,18 @@
 """Hotspot compare feature: state, tray, popup pill, and the compare view."""
 
 import datetime as dt
+import json
 
 import altair as alt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
+from onlybirds.dashboard.compare_client import (
+    popup_pill_html,
+    render_pill,
+    render_tray,
+)
 from onlybirds.dashboard.mini_map import _detail_location_map
 from onlybirds.dashboard.targets_view import (
     _filter_target_rows,
@@ -117,7 +124,6 @@ def _render_compare_tray(
     a streamlit rerun (which re-mounts the folium map iframe → flash). The
     iframe reads/writes `window.top.localStorage['onlybirds.compare']`.
     """
-    from onlybirds.dashboard.compare_client import render_tray
     render_tray(data, on_compare_view=on_compare_view)
 
 
@@ -128,7 +134,6 @@ def _compare_toggle_button(item_id: str, *, key: str) -> None:
     a streamlit rerun. State and label sync via the `storage` event when
     other tabs/iframes change the compare list.
     """
-    from onlybirds.dashboard.compare_client import render_pill
     kind = "consolidated" if _is_consolidated_id(item_id) else "hotspot"
     render_pill(item_id, kind=kind)
     _ = key  # kept for backward compat with callers
@@ -143,7 +148,6 @@ def _popup_compare_pill(
     via JS — no nav, no flash. The `current` arg is unused (state lives in
     localStorage now) but kept for call-site compatibility.
     """
-    from onlybirds.dashboard.compare_client import popup_pill_html
     _ = current
     return popup_pill_html(item_id, size=size)
 
@@ -214,6 +218,20 @@ def _presence_strip_html(
 def render_compare(data: dict[str, pd.DataFrame]) -> None:
     """Side-by-side compare of selected hotspots/consolidations."""
     current = _compare_ids()
+    # Deep links arrive with `?compare=` populated but localStorage empty;
+    # mirror the URL list into localStorage so the tray (which now reads
+    # from localStorage) stays in sync after the user leaves this view.
+    if current:
+        sync_js = (
+            "<script>try{"
+            "var k='onlybirds.compare';"
+            f"var v={json.dumps(','.join(current))};"
+            "if(window.top.localStorage.getItem(k)!==v){"
+            "window.top.localStorage.setItem(k,v);"
+            "window.top.dispatchEvent(new CustomEvent('onlybirds:compare',{detail:v.split(',')}));"
+            "}}catch(e){}</script>"
+        )
+        components.html(sync_js, height=0)
     metas_all = [m for m in (_compare_item_meta(i, data) for i in current) if m]
     if len(metas_all) < 2:
         st.info(

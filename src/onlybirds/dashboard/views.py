@@ -12,12 +12,11 @@ from streamlit_folium import st_folium
 
 from onlybirds.dashboard.compare import (
     MAX_COMPARE,
-    _compare_add_url,
     _compare_ids,
-    _compare_remove_url,
     _compare_toggle_button,
     _render_compare_tray,
 )
+from onlybirds.dashboard.compare_client import render_top_hotspots_strip
 from onlybirds.dashboard.markers import (
     _CLUSTER_ICON_FN,
     _LEGEND_HTML,
@@ -79,55 +78,22 @@ def _top_hotspots_panel(
     df = df[df["_score"] > 0].sort_values("_score", ascending=False).head(5)
     if df.empty:
         return
-    current_compare = _compare_ids()
-    chips = []
+    rows_payload = []
     for _, r in df.iterrows():
-        rare = int(r["rare_count"])
-        tot = int(r["target_count"])
-        bg = "#e74c3c" if rare else ("#1f4f99" if tot >= 5 else "#3498db")
-        prefix = f"🚨{rare} · " if rare else ""
-        marker = "⊕ " if r["is_consolidated"] else ""
-        name = str(r["name"])[:48]
         # Each url already encodes the routing (?hotspot= or ?consolidated=);
         # derive the compare-target id from it.
         target_id = r["url"].split("=", 1)[1]
-        in_compare = target_id in current_compare
-        if in_compare:
-            plus_url = _compare_remove_url(target_id, current_compare)
-            plus_glyph = "✓"
-            plus_title = "remove from compare"
-        elif len(current_compare) >= MAX_COMPARE:
-            plus_url = ""
-            plus_glyph = ""
-            plus_title = ""
-        else:
-            plus_url = _compare_add_url(target_id, current_compare)
-            plus_glyph = "+"
-            plus_title = "add to compare"
-        plus_html = (
-            f'<a href="{plus_url}" target="_self" title="{plus_title}" '
-            f'style="background:rgba(255,255,255,.22);color:white;padding:0 6px;'
-            f'border-radius:10px;font-size:11px;font-weight:800;margin-left:6px;'
-            f'text-decoration:none;line-height:1.4;">{plus_glyph}</a>'
-            if plus_glyph
-            else ""
+        rows_payload.append(
+            {
+                "id": target_id,
+                "name": str(r["name"])[:48],
+                "tot": int(r["target_count"]),
+                "rare": int(r["rare_count"]),
+                "cons": bool(r["is_consolidated"]),
+                "url": r["url"],
+            }
         )
-        chips.append(
-            f'<span style="background:{bg};color:white;padding:4px 6px 4px 10px;'
-            f'border-radius:14px;font-size:12px;font-weight:600;margin-right:6px;'
-            f'display:inline-flex;align-items:center;margin-bottom:4px;">'
-            f'<a href="{r["url"]}" target="_self" '
-            f'style="color:white;text-decoration:none;cursor:pointer;">'
-            f'{prefix}{tot}× {marker}{name}</a>{plus_html}</span>'
-        )
-    st.markdown(
-        "<div style='margin:-4px 0 6px 0;'>"
-        "<span style='color:#666;font-size:11px;font-weight:700;letter-spacing:.06em;"
-        "margin-right:8px;text-transform:uppercase;'>Top hotspots</span>"
-        + "".join(chips)
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+    render_top_hotspots_strip(rows_payload)
 
 
 def render_map(data: dict[str, pd.DataFrame]) -> None:
