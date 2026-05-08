@@ -75,7 +75,7 @@ def serve(
     port: int = typer.Option(8501, help="Streamlit port."),
 ) -> None:
     """Launch the Streamlit dashboard."""
-    dashboard = Path(__file__).resolve().parent.parent.parent / "dashboard" / "app.py"
+    dashboard = Path(__file__).resolve().parent / "dashboard" / "app.py"
     if not dashboard.exists():
         typer.echo(f"dashboard not found at {dashboard}", err=True)
         raise typer.Exit(1)
