@@ -3,6 +3,7 @@
 import calendar
 import datetime as dt
 import json
+from collections import Counter
 
 import pandas as pd
 import streamlit as st
@@ -416,11 +417,12 @@ def render_targets(data: dict[str, pd.DataFrame]) -> None:
     # Region multiselect options: every distinct region across all hotspots
     # (not the post-filter set), ordered by descending hotspot count so the
     # most populated regions surface first. Same scope as the chip strip.
-    region_counts: dict[str, int] = {}
+    region_counts: Counter[str] = Counter()
     if "region" in hotspots.columns:
-        for r in hotspots["region"]:
-            key = r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
-            region_counts[key] = region_counts.get(key, 0) + 1
+        region_counts.update(
+            r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
+            for r in hotspots["region"]
+        )
     region_options = (
         sorted(region_counts.keys(), key=lambda k: (-region_counts[k], k))
         if len(region_counts) > 1

@@ -1,5 +1,7 @@
 """Region filter chips, bbox helpers, and the chip-hover preview JS."""
 
+from collections import Counter
+
 import pandas as pd
 import streamlit as st
 
@@ -95,13 +97,14 @@ def _region_chips_panel(
     singletons: pd.DataFrame, consolidated: pd.DataFrame, active: set[str]
 ) -> None:
     """Region filter strip. Click chip → ?region=A,B,C rerenders filtered."""
-    counts: dict[str, int] = {}
+    counts: Counter[str] = Counter()
     for df in (singletons, consolidated):
         if df.empty or "region" not in df.columns:
             continue
-        for r in df["region"]:
-            key = r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
-            counts[key] = counts.get(key, 0) + 1
+        counts.update(
+            r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
+            for r in df["region"]
+        )
     # No point showing the strip if there's only one region in scope.
     if len(counts) <= 1:
         return
