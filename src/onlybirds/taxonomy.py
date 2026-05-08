@@ -7,6 +7,7 @@ falling back to fuzzy match when the CSV doesn't use canonical eBird names.
 
 import datetime as dt
 import sqlite3
+from enum import Enum
 from typing import Iterable
 
 from rapidfuzz import process, fuzz
@@ -14,6 +15,17 @@ from rapidfuzz import process, fuzz
 from .ebird import EBirdClient
 
 TAXONOMY_TTL_DAYS = 90
+
+
+class TaxonomyCategory(str, Enum):
+    SPECIES = "species"
+    SUBSPECIES = "issf"
+    HYBRID = "hybrid"
+    INTERGRADE = "intergrade"
+    FORM = "form"
+    SPUH = "spuh"
+    SLASH = "slash"
+    DOMESTIC = "domestic"
 
 
 def _is_stale(conn: sqlite3.Connection) -> bool:
@@ -38,7 +50,7 @@ def refresh_if_stale(conn: sqlite3.Connection, client: EBirdClient) -> int:
         [
             (r["speciesCode"], r["comName"], r["sciName"], r.get("familyComName"), now)
             for r in rows
-            if r.get("category") == "species"
+            if r.get("category") == TaxonomyCategory.SPECIES
         ],
     )
     conn.commit()

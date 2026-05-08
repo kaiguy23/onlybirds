@@ -51,18 +51,18 @@ def fetch_nearby(
         "VALUES (?, ?, ?, ?, ?, ?)",
         [
             (
-                h["locId"],
-                h.get("locName"),
-                h["lat"],
-                h["lng"],
-                h.get("subnational2Code") or h.get("subnational1Code") or h.get("countryCode"),
+                h.loc_id,
+                h.name,
+                h.lat,
+                h.lng,
+                h.subnational2_code or h.subnational1_code or h.country_code,
                 now,
             )
             for h in nearby
         ],
     )
 
-    nearby_ids = [h["locId"] for h in nearby]
+    nearby_ids = [h.loc_id for h in nearby]
     if force:
         to_refresh = set(nearby_ids)
     else:
@@ -80,7 +80,7 @@ def fetch_nearby(
             "INSERT OR REPLACE INTO hotspot_obs(hotspot_id, species_code, last_seen, how_many, fetched_at) "
             "VALUES (?, ?, ?, ?, ?)",
             [
-                (hotspot_id, r["speciesCode"], r.get("obsDt"), r.get("howMany"), now)
+                (hotspot_id, r.species_code, r.obs_dt, r.how_many, now)
                 for r in recent
             ],
         )

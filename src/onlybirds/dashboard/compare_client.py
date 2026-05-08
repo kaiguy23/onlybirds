@@ -21,6 +21,8 @@ import json
 import pandas as pd
 import streamlit.components.v1 as components
 
+from onlybirds.dashboard.types import HotspotKind
+
 MAX_COMPARE = 6
 _STORAGE_KEY = "onlybirds.compare"
 
@@ -33,14 +35,14 @@ def _all_metas_json(data: dict[str, pd.DataFrame]) -> str:
         for _, r in h.iterrows():
             out[r["hotspot_id"]] = {
                 "name": (r.get("name") or r["hotspot_id"])[:36],
-                "kind": "hotspot",
+                "kind": HotspotKind.HOTSPOT,
             }
     c = data.get("consolidated_hotspots")
     if c is not None and not c.empty:
         for _, r in c.iterrows():
             out[r["consolidated_id"]] = {
                 "name": (r.get("name") or r["consolidated_id"])[:36],
-                "kind": "consolidated",
+                "kind": HotspotKind.CONSOLIDATED,
             }
     return json.dumps(out)
 
@@ -236,7 +238,7 @@ def render_tray(data: dict[str, pd.DataFrame], *, on_compare_view: bool = False)
     components.html(html, height=60)
 
 
-def render_pill(item_id: str, kind: str = "hotspot") -> None:
+def render_pill(item_id: str, kind: HotspotKind = HotspotKind.HOTSPOT) -> None:
     """Render the +/✓ toggle pill for a detail page."""
     html = _PILL_HTML.format(
         lib_js=_LIB_JS,

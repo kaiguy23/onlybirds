@@ -94,9 +94,8 @@ def compute_seasonality(
                 continue
             api_calls += 1
             for o in obs:
-                code = o.get("speciesCode")
-                if code:
-                    species_months[code].add(d.month)
+                if o.species_code:
+                    species_months[o.species_code].add(d.month)
             pbar.update(1)
 
         conn.execute("DELETE FROM species_seasonality WHERE region = ?", (region,))

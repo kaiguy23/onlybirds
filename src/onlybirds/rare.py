@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from .ebird import EBirdClient
+from .ebird import EBirdClient, EBirdObservation
 
 
 def mark_rare(
@@ -21,21 +21,21 @@ def mark_rare(
     }
 
     # Pick the most recent notable record per species, restricted to target set.
-    best: dict[str, dict] = {}
+    best: dict[str, EBirdObservation] = {}
     for r in notable:
-        code = r.get("speciesCode")
+        code = r.species_code
         if code not in target_codes:
             continue
         prev = best.get(code)
-        if prev is None or r.get("obsDt", "") > prev.get("obsDt", ""):
+        if prev is None or (r.obs_dt or "") > (prev.obs_dt or ""):
             best[code] = r
 
     rows = [
         (
-            rec.get("obsDt"),
-            rec.get("lat"),
-            rec.get("lng"),
-            rec.get("locName"),
+            rec.obs_dt,
+            rec.lat,
+            rec.lng,
+            rec.loc_name,
             code,
         )
         for code, rec in best.items()

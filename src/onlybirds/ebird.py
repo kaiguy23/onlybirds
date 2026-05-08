@@ -1,6 +1,7 @@
 import os
 import time
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Self
 
 import httpx
 
@@ -9,6 +10,56 @@ BASE_URL = "https://api.ebird.org/v2"
 
 class EBirdError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class EBirdHotspot:
+    loc_id: str
+    name: str | None
+    lat: float
+    lng: float
+    country_code: str | None
+    subnational1_code: str | None
+    subnational2_code: str | None
+
+    @classmethod
+    def from_api(cls, raw: dict[str, Any]) -> Self:
+        return cls(
+            loc_id=raw["locId"],
+            name=raw.get("locName"),
+            lat=raw["lat"],
+            lng=raw["lng"],
+            country_code=raw.get("countryCode"),
+            subnational1_code=raw.get("subnational1Code"),
+            subnational2_code=raw.get("subnational2Code"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class EBirdObservation:
+    species_code: str
+    common_name: str | None
+    sci_name: str | None
+    obs_dt: str | None
+    how_many: int | None
+    loc_id: str | None
+    loc_name: str | None
+    lat: float | None
+    lng: float | None
+
+    @classmethod
+    def from_api(cls, raw: dict[str, Any]) -> Self:
+        return cls(
+            species_code=raw["speciesCode"],
+            common_name=raw.get("comName"),
+            sci_name=raw.get("sciName"),
+            obs_dt=raw.get("obsDt"),
+            how_many=raw.get("howMany"),
+            loc_id=raw.get("locId"),
+            loc_name=raw.get("locName"),
+            lat=raw.get("lat"),
+            lng=raw.get("lng"),
+        )
 
 
 class EBirdClient:
@@ -53,32 +104,37 @@ class EBirdClient:
         """Full eBird taxonomy. ~17K rows, JSON. Cache aggressively."""
         return self._get("/ref/taxonomy/ebird", fmt="json", locale=locale)
 
-    def nearby_hotspots(self, lat: float, lon: float, dist_km: int = 25, back: int = 30) -> list[dict[str, Any]]:
-        return self._get("/ref/hotspot/geo", lat=lat, lng=lon, dist=dist_km, back=back, fmt="json")
+    def nearby_hotspots(self, lat: float, lon: float, dist_km: int = 25, back: int = 30) -> list[EBirdHotspot]:
+        raw = self._get("/ref/hotspot/geo", lat=lat, lng=lon, dist=dist_km, back=back, fmt="json")
+        return [EBirdHotspot.from_api(h) for h in raw]
 
     # --- observations ---
-    def hotspot_recent(self, hotspot_id: str, back: int = 14, max_results: int = 200) -> list[dict[str, Any]]:
-        return self._get(f"/data/obs/{hotspot_id}/recent", back=back, maxResults=max_results)
+    def hotspot_recent(self, hotspot_id: str, back: int = 14, max_results: int = 200) -> list[EBirdObservation]:
+        raw = self._get(f"/data/obs/{hotspot_id}/recent", back=back, maxResults=max_results)
+        return [EBirdObservation.from_api(o) for o in raw]
 
     def region_historic(
         self, region_code: str, year: int, month: int, day: int, max_results: int = 10000
-    ) -> list[dict[str, Any]]:
+    ) -> list[EBirdObservation]:
         """All obs in a region on a specific date. Used for seasonality sampling.
 
         Use a county-level (subnational2) region — state-level can stall server-side
         and trigger ReadTimeout. We give this endpoint extra time anyway.
         """
-        return self._get(
+        raw = self._get(
             f"/data/obs/{region_code}/historic/{year}/{month}/{day}",
             timeout=60.0,
             maxResults=max_results,
             cat="species",
         )
+        return [EBirdObservation.from_api(o) for o in raw]
 
-    def region_notable(self, region_code: str, back: int = 7, max_results: int = 200) -> list[dict[str, Any]]:
+    def region_notable(self, region_code: str, back: int = 7, max_results: int = 200) -> list[EBirdObservation]:
         """Rare-bird alerts for a region (subnational1 like 'US-CA' or country like 'US')."""
-        return self._get(f"/data/obs/{region_code}/recent/notable", back=back, maxResults=max_results, detail="full")
+        raw = self._get(f"/data/obs/{region_code}/recent/notable", back=back, maxResults=max_results, detail="full")
+        return [EBirdObservation.from_api(o) for o in raw]
 
-    def geo_notable(self, lat: float, lon: float, dist_km: int = 50, back: int = 7) -> list[dict[str, Any]]:
+    def geo_notable(self, lat: float, lon: float, dist_km: int = 50, back: int = 7) -> list[EBirdObservation]:
         """Rare-bird alerts within radius of a point — better than region for an arbitrary location."""
-        return self._get("/data/obs/geo/recent/notable", lat=lat, lng=lon, dist=dist_km, back=back, detail="full")
+        raw = self._get("/data/obs/geo/recent/notable", lat=lat, lng=lon, dist=dist_km, back=back, detail="full")
+        return [EBirdObservation.from_api(o) for o in raw]

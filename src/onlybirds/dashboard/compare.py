@@ -2,6 +2,8 @@
 
 import datetime as dt
 import json
+from dataclasses import dataclass
+from enum import Enum
 
 import altair as alt
 import pandas as pd
@@ -19,10 +21,29 @@ from onlybirds.dashboard.targets_view import (
     _hotspots_by_species,
     _render_target_card,
 )
+from onlybirds.dashboard.types import HotspotKind
 from onlybirds.dashboard.urls import _consolidated_url, _hotspot_url
 from onlybirds.dashboard.utils import _days_ago
 
 MAX_COMPARE = 6
+
+
+class SpeciesBucket(str, Enum):
+    UNIQUE_TO_THIS = "Unique to this"
+    SHARED_WITH_SOME = "Shared with some"
+    COMMON_TO_ALL = "Common to all"
+
+
+@dataclass(frozen=True, slots=True)
+class CompareItemMeta:
+    id: str
+    kind: HotspotKind
+    name: str
+    lat: float
+    lon: float
+    target_count: int
+    rare_count: int
+    url: str
 
 
 def _compare_ids() -> list[str]:
@@ -48,39 +69,38 @@ def _is_consolidated_id(item_id: str) -> bool:
 
 def _compare_item_meta(
     item_id: str, data: dict[str, pd.DataFrame]
-) -> dict | None:
-    """Resolve a compare-list ID to {name, lat, lon, target_count, rare, kind}."""
+) -> CompareItemMeta | None:
     if _is_consolidated_id(item_id):
         c = data["consolidated_hotspots"]
         m = c[c["consolidated_id"] == item_id]
         if m.empty:
             return None
         r = m.iloc[0]
-        return {
-            "id": item_id,
-            "kind": "consolidated",
-            "name": r["name"] or item_id,
-            "lat": r["lat"],
-            "lon": r["lon"],
-            "target_count": int(r.get("target_count") or 0),
-            "rare_count": int(r.get("rare_target_count") or 0),
-            "url": _consolidated_url(item_id),
-        }
+        return CompareItemMeta(
+            id=item_id,
+            kind=HotspotKind.CONSOLIDATED,
+            name=r["name"] or item_id,
+            lat=r["lat"],
+            lon=r["lon"],
+            target_count=int(r.get("target_count") or 0),
+            rare_count=int(r.get("rare_target_count") or 0),
+            url=_consolidated_url(item_id),
+        )
     h = data["hotspots"]
     m = h[h["hotspot_id"] == item_id]
     if m.empty:
         return None
     r = m.iloc[0]
-    return {
-        "id": item_id,
-        "kind": "hotspot",
-        "name": r["name"] or item_id,
-        "lat": r["lat"],
-        "lon": r["lon"],
-        "target_count": int(r.get("target_count") or 0),
-        "rare_count": int(r.get("rare_target_count") or 0),
-        "url": _hotspot_url(item_id),
-    }
+    return CompareItemMeta(
+        id=item_id,
+        kind=HotspotKind.HOTSPOT,
+        name=r["name"] or item_id,
+        lat=r["lat"],
+        lon=r["lon"],
+        target_count=int(r.get("target_count") or 0),
+        rare_count=int(r.get("rare_target_count") or 0),
+        url=_hotspot_url(item_id),
+    )
 
 
 def _render_compare_tray(
@@ -102,7 +122,11 @@ def _compare_toggle_button(item_id: str, *, key: str) -> None:
     a streamlit rerun. State and label sync via the `storage` event when
     other tabs/iframes change the compare list.
     """
-    kind = "consolidated" if _is_consolidated_id(item_id) else "hotspot"
+    kind = (
+        HotspotKind.CONSOLIDATED
+        if _is_consolidated_id(item_id)
+        else HotspotKind.HOTSPOT
+    )
     render_pill(item_id, kind=kind)
     _ = key  # kept for backward compat with callers
 
@@ -139,29 +163,29 @@ def _short_label(name: str) -> str:
 
 def _presence_strip_html(
     species_code: str,
-    metas: list[dict],
+    metas: list[CompareItemMeta],
     species_at: dict[str, dict[str, dict]],
 ) -> str:
     """Compact dot strip: one pill per active hotspot, filled if species present."""
     pills: list[str] = []
     for m in metas:
-        sp = species_at[m["id"]].get(species_code)
+        sp = species_at[m.id].get(species_code)
         if sp:
             when = _days_ago(sp.get("last_seen")) or ""
-            tip = f"{m['name']} · last seen {when}" if when else m["name"]
+            tip = f"{m.name} · last seen {when}" if when else m.name
             pills.append(
                 f"<span title='{tip}' "
                 f"style='background:#1f4f99;color:white;padding:2px 7px;"
                 f"border-radius:10px;font-size:11px;font-weight:600;'>"
-                f"{_short_label(m['name'])}</span>"
+                f"{_short_label(m.name)}</span>"
             )
         else:
             pills.append(
-                f"<span title='{m['name']} · not seen here' "
+                f"<span title='{m.name} · not seen here' "
                 f"style='background:#f0f2f6;color:#aaa;padding:2px 7px;"
                 f"border-radius:10px;font-size:11px;font-weight:500;"
                 f"text-decoration:line-through;'>"
-                f"{_short_label(m['name'])}</span>"
+                f"{_short_label(m.name)}</span>"
             )
     return (
         "<div style='display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px 0;'>"
@@ -219,22 +243,22 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     # Sub-selection: which compare items are "active" in the analysis below.
     active_key = f"compare_active::{','.join(current)}"
     if active_key not in st.session_state:
-        st.session_state[active_key] = [m["id"] for m in metas_all]
-    label_by_id = {m["id"]: m["name"] for m in metas_all}
+        st.session_state[active_key] = [m.id for m in metas_all]
+    label_by_id = {m.id: m.name for m in metas_all}
     active_ids = st.multiselect(
         "Active in comparison",
-        options=[m["id"] for m in metas_all],
+        options=[m.id for m in metas_all],
         format_func=lambda i: label_by_id.get(i, i),
         key=active_key,
     )
-    metas = [m for m in metas_all if m["id"] in set(active_ids)]
+    metas = [m for m in metas_all if m.id in set(active_ids)]
     if len(metas) < 2:
         st.warning("Select at least two hotspots above to compare.")
         return
 
     # Per-hotspot species filter — narrow the species list to those seen at a
     # specific active hotspot. Default "All" keeps the bucketed view.
-    filter_options = ["All hotspots"] + [m["name"] for m in metas]
+    filter_options = ["All hotspots"] + [m.name for m in metas]
     filter_key = f"compare_only_hotspot::{','.join(active_ids)}"
     # Version suffix lets the "✕ clear" button force a fresh chart component
     # (incrementing the version → new key → streamlit remounts the iframe →
@@ -258,7 +282,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
         if sel_tuple:
             seg_iid, seg_bucket = sel_tuple
             seg_name = next(
-                (m["name"] for m in metas_all if m["id"] == seg_iid), None
+                (m.name for m in metas_all if m.id == seg_iid), None
             )
             if seg_name and seg_name in filter_options:
                 st.session_state[filter_key] = seg_name
@@ -274,19 +298,19 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     only_iid: str | None = None
     if only_choice != "All hotspots":
         only_iid = next(
-            (m["id"] for m in metas if m["name"] == only_choice), None
+            (m.id for m in metas if m.name == only_choice), None
         )
 
     # Combined location map.
     pts: list[dict] = []
     for m in metas:
-        if pd.notna(m.get("lat")) and pd.notna(m.get("lon")):
+        if pd.notna(m.lat) and pd.notna(m.lon):
             pts.append(
                 {
-                    "hotspot_id": m["id"],
-                    "name": m["name"],
-                    "lat": float(m["lat"]),
-                    "lon": float(m["lon"]),
+                    "hotspot_id": m.id,
+                    "name": m.name,
+                    "lat": float(m.lat),
+                    "lon": float(m.lon),
                 }
             )
     if pts:
@@ -299,32 +323,32 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             rare_badge = (
                 f"<span style='background:#e74c3c;color:white;padding:1px 6px;"
                 f"border-radius:8px;font-size:11px;font-weight:700;margin-left:6px;'>"
-                f"🚨 {m['rare_count']}</span>"
-                if m["rare_count"]
+                f"🚨 {m.rare_count}</span>"
+                if m.rare_count
                 else ""
             )
             cons_badge = (
                 "<span style='background:#1f4f99;color:white;padding:1px 6px;"
                 "border-radius:8px;font-size:11px;font-weight:700;margin-left:6px;'>"
                 "⊕</span>"
-                if m["kind"] == "consolidated"
+                if m.kind == HotspotKind.CONSOLIDATED
                 else ""
             )
             st.markdown(
                 f"<div style='border:1px solid #e6ecf5;border-radius:10px;padding:8px 10px;'>"
                 f"<div style='font-weight:700;font-size:13px;line-height:1.25;'>"
-                f"<a href='{m['url']}' target='_self' "
-                f"style='color:#1f4f99;text-decoration:none;'>{m['name']}</a>"
+                f"<a href='{m.url}' target='_self' "
+                f"style='color:#1f4f99;text-decoration:none;'>{m.name}</a>"
                 f"{cons_badge}{rare_badge}</div>"
                 f"<div style='color:#666;font-size:12px;margin-top:2px;'>"
-                f"{m['target_count']} target species</div>"
+                f"{m.target_count} target species</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
     # Collect species per item (needed for the bucket chart below).
     species_at: dict[str, dict[str, dict]] = {
-        m["id"]: _compare_species_at_item(m["id"], data) for m in metas
+        m.id: _compare_species_at_item(m.id, data) for m in metas
     }
     species_sets = {iid: set(sp.keys()) for iid, sp in species_at.items()}
     union_codes: set[str] = set().union(*species_sets.values()) if species_sets else set()
@@ -332,19 +356,19 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     # Bucket helpers used by both the chart (rendered after filters) and
     # the bucket-filter logic that narrows the species list below.
     n_active = len(metas)
-    _BUCKET_ORDER = ["Unique to this", "Shared with some", "Common to all"]
+    _BUCKET_ORDER = [b.value for b in SpeciesBucket]
     _present_count_by_code = {
         code: sum(1 for s in species_sets.values() if code in s)
         for code in union_codes
     }
 
-    def _bucket_for(code: str) -> str:
+    def _bucket_for(code: str) -> SpeciesBucket:
         pc = _present_count_by_code.get(code, 0)
         if pc >= n_active:
-            return "Common to all"
+            return SpeciesBucket.COMMON_TO_ALL
         if pc <= 1:
-            return "Unique to this"
-        return "Shared with some"
+            return SpeciesBucket.UNIQUE_TO_THIS
+        return SpeciesBucket.SHARED_WITH_SOME
 
     selected_bucket: str | None = st.session_state.get(bucket_key)
 
@@ -359,9 +383,9 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
 
     def _max_last_seen(code: str) -> str:
         vals = [
-            species_at[m["id"]].get(code, {}).get("last_seen")
+            species_at[m.id].get(code, {}).get("last_seen")
             for m in metas
-            if code in species_at[m["id"]]
+            if code in species_at[m.id]
         ]
         vals = [v for v in vals if v]
         return max(vals) if vals else ""
@@ -396,9 +420,9 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     bucket_rows: list[dict] = []
     for m in metas:
         species_by_bucket: dict[str, list[str]] = {b: [] for b in _BUCKET_ORDER}
-        for code in species_sets[m["id"]]:
+        for code in species_sets[m.id]:
             if code in filtered_codes:
-                species_by_bucket[_bucket_for(code)].append(
+                species_by_bucket[_bucket_for(code).value].append(
                     code_to_name.get(code, code)
                 )
         for b in _BUCKET_ORDER:
@@ -411,15 +435,15 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             )
             bucket_rows.append(
                 {
-                    "hotspot": _short_label(m["name"]),
-                    "iid": m["id"],
+                    "hotspot": _short_label(m.name),
+                    "iid": m.id,
                     "bucket": b,
                     "count": len(names),
                     "species": "\n".join(shown) + suffix if shown else "",
                 }
             )
     bucket_df = pd.DataFrame(bucket_rows)
-    hotspot_order = [_short_label(m["name"]) for m in metas]
+    hotspot_order = [_short_label(m.name) for m in metas]
     _bucket_order_idx = {b: i for i, b in enumerate(_BUCKET_ORDER)}
     bucket_df["_order"] = bucket_df["bucket"].map(_bucket_order_idx)
 
@@ -519,9 +543,9 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     # meaningful when a single hotspot is active (otherwise "unique to this"
     # has no anchor).
     if only_iid is not None and selected_bucket:
-        if selected_bucket == "Unique to this":
+        if selected_bucket == SpeciesBucket.UNIQUE_TO_THIS:
             sorted_union = sorted_union[sorted_union["_present_count"] <= 1]
-        elif selected_bucket == "Common to all":
+        elif selected_bucket == SpeciesBucket.COMMON_TO_ALL:
             sorted_union = sorted_union[sorted_union["_present_count"] >= n_active]
         else:
             sorted_union = sorted_union[
@@ -574,10 +598,10 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             best_iid: str | None = None
             best_when = ""
             for m in metas:
-                sp = species_at[m["id"]].get(row["species_code"])
+                sp = species_at[m.id].get(row["species_code"])
                 if sp and (sp.get("last_seen") or "") > best_when:
                     best_when = sp.get("last_seen") or ""
-                    best_iid = m["id"]
+                    best_iid = m.id
             sp_meta = (
                 species_at[best_iid].get(row["species_code"])
                 if best_iid
@@ -593,9 +617,9 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             )
 
     if only_iid is not None:
-        only_meta = next(m for m in metas if m["id"] == only_iid)
+        only_meta = next(m for m in metas if m.id == only_iid)
         _render_bucket(
-            f"Species at {only_meta['name']}", flat_rows, show_strip=True
+            f"Species at {only_meta.name}", flat_rows, show_strip=True
         )
     else:
         _render_bucket(
@@ -613,21 +637,21 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
             unsafe_allow_html=True,
         )
         # Group by which hotspot owns each unique species.
-        rows_by_iid: dict[str, list[pd.Series]] = {m["id"]: [] for m in metas}
+        rows_by_iid: dict[str, list[pd.Series]] = {m.id: [] for m in metas}
         for _, row in unique_rows.iterrows():
             for m in metas:
-                if row["species_code"] in species_sets[m["id"]]:
-                    rows_by_iid[m["id"]].append(row)
+                if row["species_code"] in species_sets[m.id]:
+                    rows_by_iid[m.id].append(row)
                     break
         for m in metas:
-            owned = rows_by_iid[m["id"]]
+            owned = rows_by_iid[m.id]
             if not owned:
                 continue
             with st.expander(
-                f"{m['name']} — {len(owned)} unique", expanded=False
+                f"{m.name} — {len(owned)} unique", expanded=False
             ):
                 for row in owned:
-                    sp_meta = species_at[m["id"]].get(row["species_code"], {})
+                    sp_meta = species_at[m.id].get(row["species_code"], {})
                     _render_target_card(
                         row,
                         data["seasonality"],
@@ -636,7 +660,7 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
                         how_many=sp_meta.get("how_many"),
                         hotspots_for_species=by_species.get(row["species_code"]),
                         current_hotspot_id=(
-                            m["id"] if m["kind"] == "hotspot" else None
+                            m.id if m.kind == HotspotKind.HOTSPOT else None
                         ),
                     )
 

@@ -5,8 +5,12 @@ from typing import cast
 import pytest
 
 from onlybirds import seasonality
-from onlybirds.ebird import EBirdClient, EBirdError
+from onlybirds.ebird import EBirdClient, EBirdError, EBirdObservation
 from onlybirds.seasonality import _is_fresh, _sample_dates, compute_seasonality
+
+
+def _obs(species_code: str) -> EBirdObservation:
+    return EBirdObservation.from_api({"speciesCode": species_code})
 
 
 class FakeClient:
@@ -123,8 +127,8 @@ class TestComputeSeasonality:
 
         client = FakeClient(
             obs_by_key={
-                ("US-CA", 2026, 1, 5): [{"speciesCode": "norcar"}, {"speciesCode": "amerob"}],
-                ("US-CA", 2026, 2, 5): [{"speciesCode": "norcar"}],
+                ("US-CA", 2026, 1, 5): [_obs("norcar"), _obs("amerob")],
+                ("US-CA", 2026, 2, 5): [_obs("norcar")],
             }
         )
         stats = compute_seasonality(conn, cast(EBirdClient, client))
@@ -163,7 +167,7 @@ class TestComputeSeasonality:
         )
         monkeypatch.setattr(seasonality, "_sample_dates", lambda *a, **k: [dt.date(2026, 3, 5)])
 
-        client = FakeClient(obs_by_key={("US-CA", 2026, 3, 5): [{"speciesCode": "blujay"}]})
+        client = FakeClient(obs_by_key={("US-CA", 2026, 3, 5): [_obs("blujay")]})
         stats = compute_seasonality(conn, cast(EBirdClient, client), force=True)
         assert stats["regions_fetched"] == 1
         rows = list(conn.execute("SELECT species_code, months FROM species_seasonality"))
@@ -179,7 +183,7 @@ class TestComputeSeasonality:
         client = FakeClient(
             obs_by_key={
                 ("US-CA", 2026, 1, 5): EBirdError("boom"),
-                ("US-CA", 2026, 2, 5): [{"speciesCode": "norcar"}],
+                ("US-CA", 2026, 2, 5): [_obs("norcar")],
             }
         )
         stats = compute_seasonality(conn, cast(EBirdClient, client))

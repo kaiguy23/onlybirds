@@ -4,9 +4,24 @@ import calendar
 import datetime as dt
 import json
 from collections import Counter
+from enum import Enum
 
 import pandas as pd
 import streamlit as st
+
+
+class SortMode(str, Enum):
+    RARE_THEN_RECENT = "Rare first, then recent"
+    RARE_THEN_NAME = "Rare first, then name"
+    NAME_A_TO_Z = "Name (A→Z)"
+    MOST_HOTSPOTS = "Most hotspots"
+    LAST_SEEN = "Last seen (newest)"
+
+
+class RarityFilter(str, Enum):
+    ALL = "All birds"
+    RARE_ONLY = "Rare only"
+    COMMON_ONLY = "Common only"
 
 from onlybirds.dashboard.regions import (
     _REGION_NONE_SENTINEL,
@@ -206,12 +221,12 @@ def _filter_target_rows(
     months_labels = ["Any month (no season filter)"] + [
         f"In season in {calendar.month_name[i]}" for i in range(1, 13)
     ]
-    sort_choices = ["Rare first, then recent" if has_last_seen else "Rare first, then name"]
-    sort_choices += ["Name (A→Z)"]
+    sort_choices = [SortMode.RARE_THEN_RECENT if has_last_seen else SortMode.RARE_THEN_NAME]
+    sort_choices += [SortMode.NAME_A_TO_Z]
     if has_last_seen:
-        sort_choices += ["Last seen (newest)"]
+        sort_choices += [SortMode.LAST_SEEN]
     if "hotspot_count" in df.columns:
-        sort_choices += ["Most hotspots"]
+        sort_choices += [SortMode.MOST_HOTSPOTS]
 
     show_region = bool(region_options)
     if show_region:
@@ -279,7 +294,7 @@ def _filter_target_rows(
     with cols[next_col]:
         rarity = st.selectbox(
             "Rarity",
-            ["All birds", "Rare only", "Common only"],
+            list(RarityFilter),
             key=f"{key_prefix}_rarity",
             label_visibility="collapsed",
         )
@@ -325,9 +340,9 @@ def _filter_target_rows(
             | out["sci_name"].fillna("").str.lower().str.contains(ql, regex=False)
         ]
     # Rarity.
-    if rarity == "Rare only":
+    if rarity == RarityFilter.RARE_ONLY:
         out = out[out["is_rare"] == 1]
-    elif rarity == "Common only":
+    elif rarity == RarityFilter.COMMON_ONLY:
         out = out[out["is_rare"] == 0]
     # Month-in-season. months_labels[0] is the "any" sentinel.
     if month != months_labels[0]:
@@ -348,21 +363,21 @@ def _filter_target_rows(
         out = out[out["_last_seen"].apply(_in_window)]
 
     # Sort.
-    if sort == "Name (A→Z)":
+    if sort == SortMode.NAME_A_TO_Z:
         out = out.sort_values("common_name", kind="mergesort")
-    elif sort == "Most hotspots" and "hotspot_count" in out.columns:
+    elif sort == SortMode.MOST_HOTSPOTS and "hotspot_count" in out.columns:
         out = out.sort_values(
             ["is_rare", "hotspot_count"], ascending=[False, False], kind="mergesort"
         )
-    elif sort == "Last seen (newest)" and has_last_seen:
+    elif sort == SortMode.LAST_SEEN and has_last_seen:
         out = out.sort_values(
             ["is_rare", "_last_seen"], ascending=[False, False], kind="mergesort"
         )
-    elif sort == "Rare first, then recent" and has_last_seen:
+    elif sort == SortMode.RARE_THEN_RECENT and has_last_seen:
         out = out.sort_values(
             ["is_rare", "_last_seen"], ascending=[False, False], kind="mergesort"
         )
-    else:  # "Rare first, then name"
+    else:
         out = out.sort_values(
             ["is_rare", "common_name"], ascending=[False, True], kind="mergesort"
         )
