@@ -1,7 +1,5 @@
 """Cross-check target birds against eBird rare-bird alerts from the last week."""
 
-from __future__ import annotations
-
 import sqlite3
 
 from .ebird import EBirdClient

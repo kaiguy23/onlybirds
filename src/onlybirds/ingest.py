@@ -8,8 +8,6 @@ Expected columns (case-insensitive, flexible names):
   - location / locality                        (optional)
 """
 
-from __future__ import annotations
-
 import re
 import sqlite3
 from pathlib import Path

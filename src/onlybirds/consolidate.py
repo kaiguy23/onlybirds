@@ -16,8 +16,6 @@ marker instead; clicking it reveals the originals and a deduplicated species
 list.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import math
 import sqlite3

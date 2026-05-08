@@ -111,87 +111,26 @@ def _compare_item_meta(
 def _render_compare_tray(
     data: dict[str, pd.DataFrame], *, on_compare_view: bool = False
 ) -> None:
-    """Sticky chip strip showing the current compare selection."""
-    current = _compare_ids()
-    if not current:
-        return
-    chips: list[str] = []
-    for cid in current:
-        meta = _compare_item_meta(cid, data)
-        name = (meta["name"] if meta else cid)[:36]
-        marker = "⊕ " if (meta and meta["kind"] == "consolidated") else ""
-        rm = _compare_remove_url(cid, current)
-        chips.append(
-            f"<span style='background:#1f4f99;color:white;padding:3px 6px 3px 10px;"
-            f"border-radius:14px;font-size:12px;font-weight:600;margin:0 6px 4px 0;"
-            f"display:inline-flex;align-items:center;gap:6px;'>"
-            f"{marker}{name}"
-            f"<a href='{rm}' target='_self' title='remove' "
-            f"style='color:white;text-decoration:none;opacity:.85;font-weight:700;"
-            f"padding:0 4px;'>×</a></span>"
-        )
-    compare_url = _compare_url_with(current, view="compare")
-    clear_url = _compare_url_with([])
-    cap_note = (
-        f" <span style='color:#999;font-size:11px;'>(max {MAX_COMPARE})</span>"
-        if len(current) >= MAX_COMPARE
-        else ""
-    )
-    if on_compare_view:
-        btn = ""
-    elif len(current) >= 2:
-        btn = (
-            f"<a href='{compare_url}' target='_self' "
-            f"style='background:#27ae60;color:white;padding:4px 12px;border-radius:14px;"
-            f"font-size:12px;font-weight:700;margin:0 6px 4px 0;text-decoration:none;'>"
-            f"Compare {len(current)} →</a>"
-        )
-    else:
-        btn = (
-            f"<span style='color:#999;font-size:11px;margin-right:6px;'>"
-            f"add at least one more to compare</span>"
-        )
-    st.markdown(
-        "<div class='onlybirds-compare-tray' "
-        "style='background:#fff;padding:6px 10px;border:1px solid #e6ecf5;"
-        "border-radius:10px;margin:0 0 8px 0;'>"
-        "<span style='color:#666;font-size:11px;font-weight:700;letter-spacing:.06em;"
-        "margin-right:8px;text-transform:uppercase;'>Compare</span>"
-        + "".join(chips) + cap_note + btn +
-        f"<a href='{clear_url}' target='_self' "
-        f"style='color:#999;font-size:11px;text-decoration:none;'>clear</a>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    """Sticky chip strip showing the current compare selection.
+
+    Renders as a localStorage-driven iframe so add/remove ops don't trigger
+    a streamlit rerun (which re-mounts the folium map iframe → flash). The
+    iframe reads/writes `window.top.localStorage['onlybirds.compare']`.
+    """
+    from onlybirds.dashboard.compare_client import render_tray
+    render_tray(data, on_compare_view=on_compare_view)
 
 
 def _compare_toggle_button(item_id: str, *, key: str) -> None:
-    """Styled add/remove pill for detail pages — toggles `?compare=` via URL."""
-    current = _compare_ids()
-    in_list = item_id in current
-    if in_list:
-        url = _compare_remove_url(item_id, current)
-        label = "✓ In compare — remove"
-        bg = "#27ae60"
-    elif len(current) >= MAX_COMPARE:
-        st.markdown(
-            f"<div style='display:inline-block;background:#f0f2f6;color:#999;"
-            f"padding:6px 14px;border-radius:18px;font-size:13px;font-weight:600;'>"
-            f"Compare full ({MAX_COMPARE}) — remove one first</div>",
-            unsafe_allow_html=True,
-        )
-        return
-    else:
-        url = _compare_add_url(item_id, current)
-        label = "+ Add to compare"
-        bg = "#1f4f99"
-    st.markdown(
-        f"<a href='{url}' target='_self' "
-        f"style='display:inline-block;background:{bg};color:white;padding:6px 14px;"
-        f"border-radius:18px;font-size:13px;font-weight:700;text-decoration:none;"
-        f"box-shadow:0 1px 3px rgba(0,0,0,.12);'>{label}</a>",
-        unsafe_allow_html=True,
-    )
+    """Add/remove pill for detail pages — toggles localStorage in place.
+
+    Implemented as an iframe (`components.html`) so clicking doesn't trigger
+    a streamlit rerun. State and label sync via the `storage` event when
+    other tabs/iframes change the compare list.
+    """
+    from onlybirds.dashboard.compare_client import render_pill
+    kind = "consolidated" if _is_consolidated_id(item_id) else "hotspot"
+    render_pill(item_id, kind=kind)
     _ = key  # kept for backward compat with callers
 
 
@@ -200,39 +139,13 @@ def _popup_compare_pill(
 ) -> str:
     """`+ compare` / `✓ in compare` pill for use inside a leaflet popup.
 
-    Popups live inside the streamlit-folium iframe whose sandbox blocks
-    in-tab top-navigation, so we use the same `window.open(u, '_blank')`
-    pattern as the popup title link — clicking opens a new tab navigating
-    to the URL with `?compare=` updated.
+    Mutates `window.top.localStorage` on click and updates label in place
+    via JS — no nav, no flash. The `current` arg is unused (state lives in
+    localStorage now) but kept for call-site compatibility.
     """
-    pad = "2px 8px" if size == "sm" else "3px 10px"
-    fs = "11px" if size == "sm" else "12px"
-    if item_id in current:
-        target_url = _compare_url_with([x for x in current if x != item_id])
-        bg = "#27ae60"
-        label = "✓ in compare"
-    elif len(current) >= MAX_COMPARE:
-        return (
-            f"<span style='display:inline-block;background:#f0f2f6;color:#999;"
-            f"padding:{pad};border-radius:12px;font-size:{fs};font-weight:700;'>"
-            f"compare full</span>"
-        )
-    else:
-        target_url = _compare_url_with(current + [item_id])
-        bg = "#1f4f99"
-        label = "+ compare"
-    qs = target_url[1:] if target_url.startswith("?") else target_url
-    js_open = (
-        "event.preventDefault();event.stopPropagation();"
-        f"var u=window.top.location.pathname+'?{qs}';"
-        "window.open(u,'_blank');"
-    )
-    return (
-        f"<a href='{target_url}' target='_blank' onclick=\"{js_open}\" "
-        f"style='display:inline-block;background:{bg};color:white;"
-        f"padding:{pad};border-radius:12px;font-size:{fs};font-weight:700;"
-        f"text-decoration:none;white-space:nowrap;'>{label}</a>"
-    )
+    from onlybirds.dashboard.compare_client import popup_pill_html
+    _ = current
+    return popup_pill_html(item_id, size=size)
 
 
 def _compare_species_at_item(

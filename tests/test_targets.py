@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from onlybirds.targets import compute_targets
 
 

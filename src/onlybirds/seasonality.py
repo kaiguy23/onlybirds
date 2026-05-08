@@ -9,8 +9,6 @@ Coarse — only "presence per month", no frequency. Cached 30 days because
 seasonality doesn't shift run-to-run.
 """
 
-from __future__ import annotations
-
 import calendar
 import datetime as dt
 import json

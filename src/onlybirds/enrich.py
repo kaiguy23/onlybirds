@@ -8,8 +8,6 @@ catches the classic ambiguous-common-name trap (e.g. "Redhead" the duck vs.
 "Redhead" the human hair color).
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import os
 import sqlite3

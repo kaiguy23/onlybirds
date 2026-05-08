@@ -5,8 +5,6 @@ User CSVs almost always use common names. This module resolves names → codes,
 falling back to fuzzy match when the CSV doesn't use canonical eBird names.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import sqlite3
 from typing import Iterable

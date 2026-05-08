@@ -8,8 +8,6 @@ When we do re-fetch a single hotspot's obs, we replace its rows — so a species
 that has migrated through and is no longer being reported drops out of targets.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import sqlite3
 

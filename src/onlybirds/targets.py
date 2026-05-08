@@ -1,7 +1,5 @@
 """Compute target birds: species seen at nearby hotspots that the user has not logged."""
 
-from __future__ import annotations
-
 import datetime as dt
 import sqlite3
 
