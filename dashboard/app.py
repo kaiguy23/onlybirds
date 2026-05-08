@@ -200,10 +200,16 @@ def _popup_html(hotspot_id: str, name: str, hotspot_targets: pd.DataFrame) -> st
             f' <span style="color:#888;font-size:11px;">— {when}</span>' if when else ""
         )
         rows.append(f"<li style='margin:1px 0;'>{link}{flag}{when_html}</li>")
+    # Cap the species list height so popups for big hotspots don't grow taller
+    # than the map. Beyond ~14 species the inner <ul> scrolls.
     body = (
-        "<ul style='margin:6px 0 0 0;padding-left:18px;font-size:13px;'>"
+        "<div style='max-height:340px;overflow-y:auto;margin-top:6px;"
+        # Reserve a bit of right padding so the scrollbar doesn't sit on top of
+        # the species names.
+        "padding-right:4px;'>"
+        "<ul style='margin:0;padding-left:18px;font-size:13px;'>"
         + "".join(rows)
-        + "</ul>"
+        + "</ul></div>"
         if rows
         else "<i style='color:#888;'>no targets here</i>"
     )
