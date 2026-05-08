@@ -46,38 +46,6 @@ def _is_consolidated_id(item_id: str) -> bool:
     return item_id.startswith("cons-")
 
 
-def _compare_url_with(ids: list[str], *, view: str | None = None) -> str:
-    """Build a URL that sets `?compare=` to `ids` (and optional `?view=`).
-
-    Preserves unrelated params like `?region=` so filter state survives a
-    compare-tray click; drops the routing params (`hotspot`, `consolidated`)
-    since compare actions navigate back to the map view.
-    """
-    preserved: list[tuple[str, str]] = []
-    for key in st.query_params:
-        if key in {"compare", "view", "hotspot", "consolidated"}:
-            continue
-        val = st.query_params.get(key)
-        if val:
-            preserved.append((key, val))
-    parts = [f"{k}={v}" for k, v in preserved]
-    if ids:
-        parts.append("compare=" + ",".join(ids))
-    if view:
-        parts.append(f"view={view}")
-    return "?" + "&".join(parts) if parts else "./"
-
-
-def _compare_add_url(item_id: str, current: list[str]) -> str:
-    if item_id in current or len(current) >= MAX_COMPARE:
-        return _compare_url_with(current)
-    return _compare_url_with(current + [item_id])
-
-
-def _compare_remove_url(item_id: str, current: list[str]) -> str:
-    return _compare_url_with([x for x in current if x != item_id])
-
-
 def _compare_item_meta(
     item_id: str, data: dict[str, pd.DataFrame]
 ) -> dict | None:
@@ -137,19 +105,6 @@ def _compare_toggle_button(item_id: str, *, key: str) -> None:
     kind = "consolidated" if _is_consolidated_id(item_id) else "hotspot"
     render_pill(item_id, kind=kind)
     _ = key  # kept for backward compat with callers
-
-
-def _popup_compare_pill(
-    item_id: str, current: list[str], *, size: str = "md"
-) -> str:
-    """`+ compare` / `✓ in compare` pill for use inside a leaflet popup.
-
-    Mutates `window.top.localStorage` on click and updates label in place
-    via JS — no nav, no flash. The `current` arg is unused (state lives in
-    localStorage now) but kept for call-site compatibility.
-    """
-    _ = current
-    return popup_pill_html(item_id, size=size)
 
 
 def _compare_species_at_item(

@@ -117,7 +117,6 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
     # come from `?region=A,B,C` (multi-select) and narrow the map, the
     # top-hotspots panel, and the bounds.
     _render_compare_tray(data)
-    current_compare = _compare_ids()
     active_regions = _parse_active_regions(st.query_params.get("region"))
     _region_chips_panel(singletons, consolidated, active_regions)
     if active_regions:
@@ -162,7 +161,7 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
         name = h["name"] or h["hotspot_id"]
         tooltip = folium.Tooltip(_tooltip_html(name, target_count, rare_count))
         popup = folium.Popup(
-            _popup_html(h["hotspot_id"], name, rows, current_compare),
+            _popup_html(h["hotspot_id"], name, rows),
             max_width=320,
         )
         folium.Marker(
@@ -211,9 +210,7 @@ def render_map(data: dict[str, pd.DataFrame]) -> None:
                 _consolidated_tooltip_html(name, target_count, rare_count, member_count)
             )
             popup = folium.Popup(
-                _consolidated_popup_html(
-                    cid, name, members, ctargets, current_compare
-                ),
+                _consolidated_popup_html(cid, name, members, ctargets),
                 max_width=340,
             )
             folium.Marker(

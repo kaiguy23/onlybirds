@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from onlybirds.dashboard.compare import _popup_compare_pill
+from onlybirds.dashboard.compare_client import popup_pill_html
 from onlybirds.dashboard.urls import _consolidated_url, _hotspot_url
 from onlybirds.dashboard.utils import _clean_str, _days_ago, _ebird_species_url
 
@@ -131,7 +131,6 @@ def _popup_html(
     hotspot_id: str,
     name: str,
     hotspot_targets: pd.DataFrame,
-    current_compare: list[str] | None = None,
 ) -> str:
     """Click popup: hotspot title (links to detail) + full species list.
 
@@ -194,7 +193,7 @@ def _popup_html(
         f'padding-bottom:4px;">'
         f'{name} <span style="font-size:11px;font-weight:600;">↗</span></a>'
     )
-    pill = _popup_compare_pill(hotspot_id, current_compare or [])
+    pill = popup_pill_html(hotspot_id)
     actions = (
         "<div style='display:flex;gap:6px;flex-wrap:wrap;align-items:center;"
         "border-bottom:1px solid #e6ecf5;padding-bottom:6px;margin-bottom:4px;'>"
@@ -210,14 +209,12 @@ def _consolidated_popup_html(
     name: str,
     member_rows: pd.DataFrame,
     target_rows: pd.DataFrame,
-    current_compare: list[str] | None = None,
 ) -> str:
     """Click popup for a consolidated hotspot.
 
     Lists the original hotspots (each linking to its own detail page) and the
     deduped target species across them.
     """
-    cur_cmp = current_compare or []
     members_html_parts: list[str] = []
     if member_rows is not None and not member_rows.empty:
         for _, m in member_rows.iterrows():
@@ -228,9 +225,7 @@ def _consolidated_popup_html(
                 f"var u=window.top.location.pathname+'?hotspot={m['hotspot_id']}';"
                 "window.open(u,'_blank');"
             )
-            member_pill = _popup_compare_pill(
-                m["hotspot_id"], cur_cmp, size="sm"
-            )
+            member_pill = popup_pill_html(m["hotspot_id"], size="sm")
             members_html_parts.append(
                 f"<li style='margin:2px 0;display:flex;gap:6px;"
                 f"align-items:center;flex-wrap:wrap;'>"
@@ -294,7 +289,7 @@ def _consolidated_popup_html(
         f'padding-bottom:4px;">'
         f'⊕ {name} <span style="font-size:11px;font-weight:600;">↗</span></a>'
     )
-    cons_pill = _popup_compare_pill(consolidated_id, cur_cmp)
+    cons_pill = popup_pill_html(consolidated_id)
     actions = (
         "<div style='display:flex;gap:6px;flex-wrap:wrap;align-items:center;"
         "border-bottom:1px solid #e6ecf5;padding-bottom:6px;margin-bottom:4px;'>"
