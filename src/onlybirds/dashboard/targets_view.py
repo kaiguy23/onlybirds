@@ -63,10 +63,23 @@ def _render_hotspot_list(hotspots_df: pd.DataFrame, *, current_hotspot_id: str |
         hid = h["hotspot_id"]
         name = h.get("name") or hid
         when = _days_ago(h.get("last_seen"))
+        count_str = ""
+        hm = h.get("how_many")
+        if hm is not None and not _is_nan(hm):
+            try:
+                n_birds = int(hm)
+                if n_birds > 0:
+                    count_str = f" · count {n_birds}"
+            except (TypeError, ValueError):
+                pass
         when_html = (
-            f"<span style='color:#888;font-size:12px;'> · last seen {when}</span>"
+            f"<span style='color:#888;font-size:12px;'> · last seen {when}{count_str}</span>"
             if when
-            else ""
+            else (
+                f"<span style='color:#888;font-size:12px;'>{count_str}</span>"
+                if count_str
+                else ""
+            )
         )
         rare_html = " 🚨" if h.get("is_rare") else ""
         if hid == current_hotspot_id:
@@ -115,7 +128,7 @@ def _render_target_card(
                 try:
                     n = int(how_many)
                     if n > 0:
-                        count_str = f" · {n} bird{'s' if n != 1 else ''}"
+                        count_str = f" · count {n}"
                 except (TypeError, ValueError):
                     pass
             st.markdown(

@@ -25,7 +25,11 @@ onlybirds = "onlybirds.cli:app"
 dev = [
     "ty",
     "pre-commit",
+    "pytest>=8.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["hatchling"]
