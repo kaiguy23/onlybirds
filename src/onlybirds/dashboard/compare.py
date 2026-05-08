@@ -2,6 +2,7 @@
 
 import datetime as dt
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -349,6 +350,31 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
     # specific active hotspot. Default "All" keeps the bucketed view.
     filter_options = ["All hotspots"] + [m["name"] for m in metas]
     filter_key = f"compare_only_hotspot::{','.join(active_ids)}"
+    chart_key = f"compare_chart::{','.join(active_ids)}"
+    applied_key = f"compare_chart_applied::{','.join(active_ids)}"
+    bucket_key = f"compare_chart_bucket::{','.join(active_ids)}"
+
+    # Sync a prior chart click into the selectbox state before the widget
+    # renders. Change-detection on `applied_key` avoids re-forcing the value
+    # on every rerun (which would block manual selectbox changes).
+    chart_state = st.session_state.get(chart_key, {})
+    seg_list = (chart_state.get("selection") or {}).get("seg") or []
+    sel_tuple = (
+        (seg_list[0].get("iid"), seg_list[0].get("bucket")) if seg_list else None
+    )
+    if sel_tuple != st.session_state.get(applied_key):
+        st.session_state[applied_key] = sel_tuple
+        if sel_tuple:
+            seg_iid, seg_bucket = sel_tuple
+            seg_name = next(
+                (m["name"] for m in metas_all if m["id"] == seg_iid), None
+            )
+            if seg_name and seg_name in filter_options:
+                st.session_state[filter_key] = seg_name
+            st.session_state[bucket_key] = seg_bucket
+        else:
+            st.session_state[bucket_key] = None
+
     only_choice = st.selectbox(
         "Show only species at",
         filter_options,
@@ -405,14 +431,132 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
                 unsafe_allow_html=True,
             )
 
-    st.divider()
-
-    # Collect species per item.
+    # Collect species per item (needed for the bucket chart below).
     species_at: dict[str, dict[str, dict]] = {
         m["id"]: _compare_species_at_item(m["id"], data) for m in metas
     }
     species_sets = {iid: set(sp.keys()) for iid, sp in species_at.items()}
     union_codes: set[str] = set().union(*species_sets.values()) if species_sets else set()
+
+    # Stacked-bar overview — one row per active hotspot, broken into
+    # unique / shared-with-some / common-to-all. Clicking a segment drives
+    # the selectbox above and applies a bucket filter to the species list.
+    n_active = len(metas)
+    _BUCKET_ORDER = ["Unique to this", "Shared with some", "Common to all"]
+    _present_count_by_code = {
+        code: sum(1 for s in species_sets.values() if code in s)
+        for code in union_codes
+    }
+
+    def _bucket_for(code: str) -> str:
+        pc = _present_count_by_code.get(code, 0)
+        if pc >= n_active:
+            return "Common to all"
+        if pc <= 1:
+            return "Unique to this"
+        return "Shared with some"
+
+    bucket_rows: list[dict] = []
+    for m in metas:
+        counts = {b: 0 for b in _BUCKET_ORDER}
+        for code in species_sets[m["id"]]:
+            counts[_bucket_for(code)] += 1
+        for b in _BUCKET_ORDER:
+            bucket_rows.append(
+                {
+                    "hotspot": _short_label(m["name"]),
+                    "iid": m["id"],
+                    "bucket": b,
+                    "count": counts[b],
+                }
+            )
+    bucket_df = pd.DataFrame(bucket_rows)
+    hotspot_order = [_short_label(m["name"]) for m in metas]
+
+    seg_param = alt.selection_point(
+        name="seg", fields=["iid", "bucket"], empty=False, on="click"
+    )
+    # Stable left→right ordering of segments within each bar.
+    _bucket_order_idx = {b: i for i, b in enumerate(_BUCKET_ORDER)}
+    bucket_df["_order"] = bucket_df["bucket"].map(_bucket_order_idx)
+    base = alt.Chart(bucket_df).encode(
+        y=alt.Y(
+            "hotspot:N",
+            sort=hotspot_order,
+            axis=alt.Axis(title=None, labelLimit=200),
+            scale=alt.Scale(paddingInner=0.3, paddingOuter=0.2),
+        ),
+        x=alt.X(
+            "count:Q",
+            stack="zero",
+            axis=alt.Axis(title="target species"),
+        ),
+        order=alt.Order("_order:Q"),
+    )
+    bars = base.mark_bar(cursor="pointer").encode(
+        color=alt.Color(
+            "bucket:N",
+            scale=alt.Scale(
+                domain=_BUCKET_ORDER,
+                range=["#1f4f99", "#7fb8e0", "#bdbdbd"],
+            ),
+            legend=alt.Legend(orient="top", title=None),
+            sort=_BUCKET_ORDER,
+        ),
+        tooltip=[
+            alt.Tooltip("hotspot:N", title="hotspot"),
+            alt.Tooltip("bucket:N", title="bucket"),
+            alt.Tooltip("count:Q", title="species"),
+        ],
+        opacity=alt.condition(seg_param, alt.value(1.0), alt.value(0.55)),
+    ).add_params(seg_param)
+    labels = base.mark_text(
+        align="center",
+        baseline="middle",
+        color="white",
+        fontWeight="bold",
+        fontSize=12,
+    ).encode(
+        text=alt.condition("datum.count > 0", alt.Text("count:Q"), alt.value("")),
+    ).transform_filter("datum.count > 0")
+    chart = (bars + labels).properties(
+        height=max(60 * len(metas) + 80, 200)
+    )
+    st.markdown(
+        "<div style='font-weight:600;font-size:13px;margin:8px 0 4px 0;color:#666;'>"
+        "Species breakdown — click a segment to filter</div>",
+        unsafe_allow_html=True,
+    )
+    st.altair_chart(
+        chart,
+        use_container_width=True,
+        on_select="rerun",
+        key=chart_key,
+    )
+
+    selected_bucket: str | None = st.session_state.get(bucket_key)
+    if selected_bucket and only_choice != "All hotspots":
+        clear_url = _compare_url_with(current)
+        # Clearing the chart selection requires resetting both session keys
+        # plus a rerun; a tiny inline button is the cleanest UX.
+        cb_cols = st.columns([6, 1])
+        with cb_cols[0]:
+            st.markdown(
+                f"<div style='background:#eef3fb;color:#1f4f99;padding:6px 10px;"
+                f"border-radius:8px;font-size:13px;font-weight:600;display:inline-block;'>"
+                f"Filtering to <b>{selected_bucket.lower()}</b> at "
+                f"<b>{only_choice}</b></div>",
+                unsafe_allow_html=True,
+            )
+        with cb_cols[1]:
+            if st.button("✕ clear", key=f"clear_seg_{chart_key}"):
+                st.session_state[bucket_key] = None
+                st.session_state[applied_key] = None
+                # Reset chart's own selection state so the segment de-highlights.
+                st.session_state[chart_key] = {"selection": {"seg": []}}
+                st.rerun()
+
+    st.divider()
 
     # Build a target frame for the union, with _last_seen = MAX across active items.
     targets = data["targets"]
@@ -442,6 +586,20 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
         else union_df
     )
 
+    # Bar-chart segment click adds a bucket filter on top of the hotspot scope.
+    # Only meaningful when a single hotspot is active (otherwise "unique to this"
+    # has no anchor).
+    if only_iid is not None and selected_bucket:
+        if selected_bucket == "Unique to this":
+            scoped_df = scoped_df[scoped_df["_present_count"] <= 1]
+        elif selected_bucket == "Common to all":
+            scoped_df = scoped_df[scoped_df["_present_count"] >= n_active]
+        else:
+            scoped_df = scoped_df[
+                (scoped_df["_present_count"] >= 2)
+                & (scoped_df["_present_count"] < n_active)
+            ]
+
     sorted_union = _filter_target_rows(
         scoped_df,
         data["seasonality"],
@@ -453,7 +611,6 @@ def render_compare(data: dict[str, pd.DataFrame]) -> None:
         return
 
     # Bucket by presence.
-    n_active = len(metas)
     if only_iid is not None:
         # Single-hotspot filter: skip bucketing, show all matching species in
         # one flat section.
