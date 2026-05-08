@@ -101,8 +101,15 @@ src/onlybirds/
   targets.py        # set diff: hotspot species not in life list
   rare.py           # cross-check against /recent/notable
   enrich.py         # Wikipedia summary + image (TTL 30d)
-dashboard/
-  app.py            # Streamlit + folium UI
+  dashboard/        # Streamlit + folium UI
+    app.py          # entrypoint + routing
+    views.py        # map + hotspot/consolidated detail pages
+    compare.py      # hotspot-compare feature (state, tray, view)
+    targets_view.py # target species rendering + filter bar
+    markers.py      # folium markers + tooltip/popup HTML
+    regions.py      # region filter chips
+    mini_map.py     # compact map for detail pages
+    data.py, urls.py, utils.py, styles.py
 life-lists/         # your CSVs go here
 data/               # SQLite db + caches (gitignored)
 ```
