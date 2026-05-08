@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 
 from onlybirds import seasonality
-from onlybirds.ebird import EBirdClient
+from onlybirds.ebird import EBirdClient, EBirdError
 from onlybirds.seasonality import _is_fresh, _sample_dates, compute_seasonality
 
 
@@ -172,8 +172,6 @@ class TestComputeSeasonality:
         assert json.loads(rows[0]["months"]) == [3]
 
     def test_skips_failed_dates(self, conn, monkeypatch):
-        from onlybirds.ebird import EBirdError
-
         self._seed_hotspot(conn)
         sample = [dt.date(2026, 1, 5), dt.date(2026, 2, 5)]
         monkeypatch.setattr(seasonality, "_sample_dates", lambda *a, **k: sample)
