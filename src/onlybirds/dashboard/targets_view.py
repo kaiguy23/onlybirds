@@ -298,6 +298,7 @@ def _filter_target_rows(
             "Rarity",
             list(RarityFilter),
             key=f"{key_prefix}_rarity",
+            format_func=lambda r: r.value,
             label_visibility="collapsed",
         )
     with cols[next_col + 1]:
@@ -321,6 +322,7 @@ def _filter_target_rows(
                 "Sort",
                 sort_choices,
                 key=f"{key_prefix}_sort",
+                format_func=lambda s: s.value,
                 label_visibility="collapsed",
             )
     else:
@@ -330,6 +332,7 @@ def _filter_target_rows(
                 "Sort",
                 sort_choices,
                 key=f"{key_prefix}_sort",
+                format_func=lambda s: s.value,
                 label_visibility="collapsed",
             )
 
