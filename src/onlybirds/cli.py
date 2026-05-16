@@ -61,7 +61,7 @@ def run(
         typer.echo(f"      {s6}")
 
         typer.echo("[7/7] enriching with Wikipedia…")
-        s7 = enrich.enrich_targets(conn, force=force_refresh)
+        s7 = enrich.enrich_species(conn, force=force_refresh)
         typer.echo(f"      {s7}")
 
     typer.echo(f"\nDone. Run `onlybirds serve --db {db_path}` to view the dashboard.")

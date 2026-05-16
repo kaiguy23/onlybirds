@@ -159,15 +159,22 @@ def _clear_failed_fetches(conn: sqlite3.Connection) -> int:
     return cur.rowcount or 0
 
 
-def enrich_targets(conn: sqlite3.Connection, force: bool = False) -> dict[str, int]:
+def enrich_species(conn: sqlite3.Connection, force: bool = False) -> dict[str, int]:
+    """Fetch Wikipedia data for every species we might display.
+
+    Scope: union of (targets) and (species observed at any cached hotspot).
+    The hotspot side covers seen birds that show up in the "all birds at this
+    hotspot" view — without it those cards would be missing image + summary.
+    """
     cleared = _clear_failed_fetches(conn)
 
     rows = conn.execute(
         """
-        SELECT t.species_code, x.common_name, x.sci_name, s.fetched_at
-        FROM targets t
-        JOIN taxonomy x ON x.species_code = t.species_code
-        LEFT JOIN species_info s ON s.species_code = t.species_code
+        SELECT x.species_code, x.common_name, x.sci_name, s.fetched_at
+        FROM taxonomy x
+        LEFT JOIN species_info s ON s.species_code = x.species_code
+        WHERE x.species_code IN (SELECT species_code FROM targets)
+           OR x.species_code IN (SELECT species_code FROM hotspot_obs)
         """
     ).fetchall()
 
@@ -196,5 +203,5 @@ def enrich_targets(conn: sqlite3.Connection, force: bool = False) -> dict[str, i
         "skipped_fresh": skipped,
         "cleared_failed": cleared,
         "failed_now": failed,
-        "total_targets": len(rows),
+        "total_species": len(rows),
     }

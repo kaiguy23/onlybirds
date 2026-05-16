@@ -81,6 +81,8 @@ just serve 8600         # custom port
 
 Circle size scales with target count; cluster bubbles use the same scheme. A floating legend in the bottom-left explains it. Above the map, a "Top hotspots" ribbon lists the highest-scoring spots (rare-weighted) as clickable chips. Hover for a quick tooltip; click for the full species list (each species shows when it was last seen — `today`, `2d ago`, `Apr 17`); click the popup title to open a per-hotspot detail page in a new tab.
 
+Hotspot and consolidated-hotspot detail pages default to **targets only** (birds you haven't seen). A "Show all birds at this hotspot" toggle expands the list to every species observed there, with the same card layout (image + Wikipedia summary). Wikipedia enrichment runs against the union of targets and species seen at any cached hotspot, so seen-bird cards have the same metadata as targets.
+
 **Target-list tab.** Scrollable feed with photos, Wikipedia blurbs, in-season badges (✅ / ⚠️ off-season with a Jan–Dec strip), and a "rare alerts only" toggle.
 
 ## CSV format
@@ -100,7 +102,7 @@ src/onlybirds/
   seasonality.py    # sample historical obs per county (TTL 30d)
   targets.py        # set diff: hotspot species not in life list
   rare.py           # cross-check against /recent/notable
-  enrich.py         # Wikipedia summary + image (TTL 30d)
+  enrich.py         # Wikipedia summary + image (TTL 30d) — targets ∪ hotspot species
   dashboard/        # Streamlit + folium UI
     app.py          # entrypoint + routing
     views.py        # map + hotspot/consolidated detail pages

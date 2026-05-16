@@ -46,11 +46,11 @@ def main() -> None:
         return
     consolidated_id = st.query_params.get("consolidated")
     if consolidated_id:
-        render_consolidated_detail(consolidated_id, data)
+        render_consolidated_detail(consolidated_id, data, args.db)
         return
     hotspot_id = st.query_params.get("hotspot")
     if hotspot_id:
-        render_hotspot_detail(hotspot_id, data)
+        render_hotspot_detail(hotspot_id, data, args.db)
         return
 
     tab_map, tab_list = st.tabs(["Map", "Target list"])

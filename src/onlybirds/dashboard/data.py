@@ -137,3 +137,66 @@ def load_data(db_path: str) -> DashboardData:
         consolidated_members=consolidated_members,
         consolidated_targets=consolidated_targets,
     )
+
+
+@st.cache_data(ttl=60)
+def load_hotspot_all_species(db_path: str, hotspot_id: str) -> pd.DataFrame:
+    """Every species observed at a hotspot, with taxonomy + species_info joined.
+
+    Unlike `hotspot_targets`, this is not filtered by the targets table — seen
+    species are included. `is_rare` is coalesced to 0 for non-target species.
+    """
+    with db.session(db_path) as conn:
+        return pd.read_sql_query(
+            """
+            SELECT ho.species_code,
+                   x.common_name, x.sci_name, x.family,
+                   COALESCE(t.is_rare, 0) AS is_rare,
+                   t.rare_seen_at, t.rare_lat, t.rare_lon, t.rare_loc_name,
+                   s.summary, s.image_url, s.wiki_url,
+                   (SELECT COUNT(DISTINCT ho2.hotspot_id)
+                    FROM hotspot_obs ho2
+                    WHERE ho2.species_code = ho.species_code) AS hotspot_count,
+                   ho.last_seen, ho.how_many
+            FROM hotspot_obs ho
+            JOIN taxonomy x ON x.species_code = ho.species_code
+            LEFT JOIN targets t ON t.species_code = ho.species_code
+            LEFT JOIN species_info s ON s.species_code = ho.species_code
+            WHERE ho.hotspot_id = ?
+            ORDER BY is_rare DESC, ho.last_seen DESC
+            """,
+            conn,
+            params=[hotspot_id],
+        )
+
+
+@st.cache_data(ttl=60)
+def load_consolidated_all_species(
+    db_path: str, consolidated_id: str
+) -> pd.DataFrame:
+    """Every species observed across a consolidated hotspot's members, deduped."""
+    with db.session(db_path) as conn:
+        return pd.read_sql_query(
+            """
+            SELECT ho.species_code,
+                   x.common_name, x.sci_name, x.family,
+                   COALESCE(t.is_rare, 0) AS is_rare,
+                   t.rare_seen_at, t.rare_lat, t.rare_lon, t.rare_loc_name,
+                   s.summary, s.image_url, s.wiki_url,
+                   (SELECT COUNT(DISTINCT ho2.hotspot_id)
+                    FROM hotspot_obs ho2
+                    WHERE ho2.species_code = ho.species_code) AS hotspot_count,
+                   MAX(ho.last_seen) AS last_seen,
+                   MAX(ho.how_many)  AS how_many
+            FROM consolidated_hotspot_members chm
+            JOIN hotspot_obs ho ON ho.hotspot_id = chm.hotspot_id
+            JOIN taxonomy x ON x.species_code = ho.species_code
+            LEFT JOIN targets t ON t.species_code = ho.species_code
+            LEFT JOIN species_info s ON s.species_code = ho.species_code
+            WHERE chm.consolidated_id = ?
+            GROUP BY ho.species_code
+            ORDER BY is_rare DESC, last_seen DESC
+            """,
+            conn,
+            params=[consolidated_id],
+        )

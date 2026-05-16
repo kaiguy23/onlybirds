@@ -16,7 +16,11 @@ from onlybirds.dashboard.compare import (
     _render_compare_tray,
 )
 from onlybirds.dashboard.compare_client import render_top_hotspots_strip
-from onlybirds.dashboard.data import DashboardData
+from onlybirds.dashboard.data import (
+    DashboardData,
+    load_consolidated_all_species,
+    load_hotspot_all_species,
+)
 from onlybirds.dashboard.markers import (
     _CLUSTER_ICON_FN,
     _LEGEND_HTML,
@@ -278,7 +282,7 @@ def render_map(data: DashboardData) -> None:
 
 
 def render_consolidated_detail(
-    consolidated_id: str, data: DashboardData
+    consolidated_id: str, data: DashboardData, db_path: str
 ) -> None:
     """Detail view for a consolidated hotspot: deduped species across members."""
     consolidated = data.consolidated_hotspots
@@ -391,40 +395,61 @@ def render_consolidated_detail(
             unsafe_allow_html=True,
         )
 
-    # Deduped target species across all members. Rebuild from the full targets
-    # table so we get every metadata column (sci_name, family, summary…).
-    here = data.consolidated_targets
-    here = here[here["consolidated_id"] == consolidated_id]
-    if here.empty:
-        st.info("No target species recorded across these hotspots yet.")
-        return
-
-    obs_by_code = {
-        r["species_code"]: (r.get("last_seen"), r.get("how_many"))
-        for _, r in here.iterrows()
-    }
-    targets = data.targets
-    species_codes = set(here["species_code"])
-    filtered = targets[targets["species_code"].isin(species_codes)].copy()
-    if filtered.empty:
-        st.caption(
-            f"{len(here)} species observed across these hotspots "
-            f"(full target metadata unavailable)."
-        )
-        return
-    filtered["_last_seen"] = filtered["species_code"].map(
-        lambda code: obs_by_code.get(code, (None, None))[0] or ""
+    show_all = st.toggle(
+        "Show all birds across these hotspots (including ones I've seen)",
+        value=False,
+        key=f"show_all_{consolidated_id}",
     )
+
+    if show_all:
+        filtered = load_consolidated_all_species(db_path, consolidated_id).copy()
+        if filtered.empty:
+            st.info("No species recorded across these hotspots yet.")
+            return
+        obs_by_code = {
+            r["species_code"]: (r.get("last_seen"), r.get("how_many"))
+            for _, r in filtered.iterrows()
+        }
+        filtered["_last_seen"] = filtered["last_seen"].fillna("")
+        total_label = (
+            f"{len(filtered)} unique species across {member_count} hotspots"
+        )
+    else:
+        # Deduped target species across all members. Rebuild from the full targets
+        # table so we get every metadata column (sci_name, family, summary…).
+        here = data.consolidated_targets
+        here = here[here["consolidated_id"] == consolidated_id]
+        if here.empty:
+            st.info("No target species recorded across these hotspots yet.")
+            return
+
+        obs_by_code = {
+            r["species_code"]: (r.get("last_seen"), r.get("how_many"))
+            for _, r in here.iterrows()
+        }
+        targets = data.targets
+        species_codes = set(here["species_code"])
+        filtered = targets[targets["species_code"].isin(species_codes)].copy()
+        if filtered.empty:
+            st.caption(
+                f"{len(here)} species observed across these hotspots "
+                f"(full target metadata unavailable)."
+            )
+            return
+        filtered["_last_seen"] = filtered["species_code"].map(
+            lambda code: obs_by_code.get(code, (None, None))[0] or ""
+        )
+        total_label = (
+            f"{len(filtered)} unique target species across {member_count} hotspots"
+        )
+
     sorted_filtered = _filter_target_rows(
         filtered,
         data.seasonality,
-        key_prefix=f"consolidated_{consolidated_id}",
+        key_prefix=f"consolidated_{consolidated_id}_{'all' if show_all else 'targets'}",
         has_last_seen=True,
     )
-    st.caption(
-        f"showing {len(sorted_filtered)} of {len(filtered)} unique target species "
-        f"across {member_count} hotspots"
-    )
+    st.caption(f"showing {len(sorted_filtered)} of {total_label}")
     if sorted_filtered.empty:
         st.info("No targets match these filters.")
         return
@@ -442,7 +467,9 @@ def render_consolidated_detail(
         )
 
 
-def render_hotspot_detail(hotspot_id: str, data: DashboardData) -> None:
+def render_hotspot_detail(
+    hotspot_id: str, data: DashboardData, db_path: str
+) -> None:
     """Detail view for a single hotspot: header + filtered target cards."""
     hotspots = data.hotspots
     match = hotspots[hotspots["hotspot_id"] == hotspot_id]
@@ -502,48 +529,64 @@ def render_hotspot_detail(hotspot_id: str, data: DashboardData) -> None:
             highlight_id=hotspot_id,
         )
 
-    # Filter targets to species seen at this hotspot
-    here = data.hotspot_targets
-    here = here[here["hotspot_id"] == hotspot_id]
-    if here.empty:
-        st.info("No target species recorded at this hotspot yet.")
-        return
-
-    # Map species_code -> (last_seen, how_many) for this hotspot
-    obs_by_code = {
-        r["species_code"]: (r.get("last_seen"), r.get("how_many"))
-        for _, r in here.iterrows()
-    }
-
-    targets = data.targets
-    species_codes = set(here["species_code"])
-    filtered = targets[targets["species_code"].isin(species_codes)].copy()
-    if filtered.empty:
-        # Targets table is empty but obs exist — fall back to bare hotspot_targets
-        st.caption(f"{len(here)} species observed here (full target metadata unavailable).")
-        for _, t in here.iterrows():
-            flag = " 🚨" if t["is_rare"] else ""
-            when = _days_ago(t.get("last_seen"))
-            when_str = f" — *{when}*" if when else ""
-            wiki_url = _clean_str(t.get("wiki_url"))
-            link = f"[{t['common_name']}]({wiki_url})" if wiki_url else t["common_name"]
-            st.markdown(f"- {link}{flag}{when_str}")
-        return
-
-    # Attach last_seen so filter/sort can use it.
-    filtered["_last_seen"] = filtered["species_code"].map(
-        lambda c: obs_by_code.get(c, (None, None))[0] or ""
+    # Toggle: by default show only target species (unseen). When on, show every
+    # species observed at this hotspot — seen birds get card metadata via the
+    # taxonomy + species_info join in load_hotspot_all_species.
+    show_all = st.toggle(
+        "Show all birds at this hotspot (including ones I've seen)",
+        value=False,
+        key=f"show_all_{hotspot_id}",
     )
+
+    if show_all:
+        filtered = load_hotspot_all_species(db_path, hotspot_id).copy()
+        if filtered.empty:
+            st.info("No species recorded at this hotspot yet.")
+            return
+        obs_by_code = {
+            r["species_code"]: (r.get("last_seen"), r.get("how_many"))
+            for _, r in filtered.iterrows()
+        }
+        filtered["_last_seen"] = filtered["last_seen"].fillna("")
+        total_label = f"{len(filtered)} species observed at this hotspot"
+    else:
+        here = data.hotspot_targets
+        here = here[here["hotspot_id"] == hotspot_id]
+        if here.empty:
+            st.info("No target species recorded at this hotspot yet.")
+            return
+
+        obs_by_code = {
+            r["species_code"]: (r.get("last_seen"), r.get("how_many"))
+            for _, r in here.iterrows()
+        }
+
+        targets = data.targets
+        species_codes = set(here["species_code"])
+        filtered = targets[targets["species_code"].isin(species_codes)].copy()
+        if filtered.empty:
+            st.caption(f"{len(here)} species observed here (full target metadata unavailable).")
+            for _, t in here.iterrows():
+                flag = " 🚨" if t["is_rare"] else ""
+                when = _days_ago(t.get("last_seen"))
+                when_str = f" — *{when}*" if when else ""
+                wiki_url = _clean_str(t.get("wiki_url"))
+                link = f"[{t['common_name']}]({wiki_url})" if wiki_url else t["common_name"]
+                st.markdown(f"- {link}{flag}{when_str}")
+            return
+
+        filtered["_last_seen"] = filtered["species_code"].map(
+            lambda c: obs_by_code.get(c, (None, None))[0] or ""
+        )
+        total_label = f"{len(filtered)} target species at this hotspot"
 
     sorted_filtered = _filter_target_rows(
         filtered,
         data.seasonality,
-        key_prefix=f"hotspot_{hotspot_id}",
+        key_prefix=f"hotspot_{hotspot_id}_{'all' if show_all else 'targets'}",
         has_last_seen=True,
     )
-    st.caption(
-        f"showing {len(sorted_filtered)} of {len(filtered)} target species at this hotspot"
-    )
+    st.caption(f"showing {len(sorted_filtered)} of {total_label}")
     if sorted_filtered.empty:
         st.info("No targets match these filters.")
         return
