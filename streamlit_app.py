@@ -3,6 +3,4 @@
 Cloud's "Main file path" points here; it re-exports the dashboard's `main()`.
 """
 
-from onlybirds.dashboard.app import main
-
-main()
+import onlybirds.dashboard.app  # noqa: F401 — importing runs main() via its else-branch
