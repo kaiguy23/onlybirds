@@ -136,7 +136,18 @@ def _render_target_card(
             st.image(img, width="stretch")
     with cols[1]:
         badge = " 🚨 **RARE**" if row["is_rare"] else ""
-        st.markdown(f"### {row['common_name']}{badge}")
+        # is_target is only present on the "show all birds" frames; absence
+        # implies a target list, so default to True (no "seen" badge needed).
+        is_target = row.get("is_target", True)
+        seen_badge = (
+            " <span style='background:#e7f3e7;color:#2d7a2d;padding:2px 8px;"
+            "border-radius:10px;font-size:12px;font-weight:600;'>✓ seen</span>"
+            if not is_target
+            else ""
+        )
+        st.markdown(
+            f"### {row['common_name']}{badge}{seen_badge}", unsafe_allow_html=True
+        )
         meta = f"*{row['sci_name']}* — {row['family'] or ''}"
         st.caption(meta)
         when = _days_ago(last_seen)

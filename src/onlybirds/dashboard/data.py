@@ -152,6 +152,7 @@ def load_hotspot_all_species(db_path: str, hotspot_id: str) -> pd.DataFrame:
             SELECT ho.species_code,
                    x.common_name, x.sci_name, x.family,
                    COALESCE(t.is_rare, 0) AS is_rare,
+                   (t.species_code IS NOT NULL) AS is_target,
                    t.rare_seen_at, t.rare_lat, t.rare_lon, t.rare_loc_name,
                    s.summary, s.image_url, s.wiki_url,
                    (SELECT COUNT(DISTINCT ho2.hotspot_id)
@@ -181,6 +182,7 @@ def load_consolidated_all_species(
             SELECT ho.species_code,
                    x.common_name, x.sci_name, x.family,
                    COALESCE(t.is_rare, 0) AS is_rare,
+                   (t.species_code IS NOT NULL) AS is_target,
                    t.rare_seen_at, t.rare_lat, t.rare_lon, t.rare_loc_name,
                    s.summary, s.image_url, s.wiki_url,
                    (SELECT COUNT(DISTINCT ho2.hotspot_id)
