@@ -24,7 +24,8 @@ from onlybirds.dashboard.views import (
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default=str(db.DEFAULT_DB_PATH))
-    return parser.parse_args(sys.argv[1:])
+    args, _ = parser.parse_known_args(sys.argv[1:])
+    return args
 
 
 def main() -> None:

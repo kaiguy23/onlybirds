@@ -10,8 +10,6 @@ wheels/
 .venv
 
 # Local data + secrets
-data/
-*.db
+data/*
+!data/onlybirds.db
 .env
-
-life-lists/

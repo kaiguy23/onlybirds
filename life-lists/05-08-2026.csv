@@ -1,0 +1,211 @@
+Row #,Taxon Order,Category,Common Name,Scientific Name,Count,Location,S/P,Date,LocID,SubID,Exotic,Countable
+1,667,species,Redhead,Aythya americana,,Marsh,US-CA,08 May 2026,L49201960,S334661574,,1
+2,33864,species,Great-tailed Grackle,Quiscalus mexicanus,,Marsh,US-CA,08 May 2026,L49201708,S334654852,,1
+3,7815,species,Turkey Vulture,Cathartes aura,,Marsh,US-CA,07 May 2026,L48601161,S334321483,,1
+4,16912,species,Western Wood-Pewee,Contopus sordidulus,,Marsh,US-CA,07 May 2026,L49668294,S334288648,,1
+5,34439,species,Western Tanager,Piranga ludoviciana,,Marsh,US-CA,07 May 2026,L50576349,S334282982,,1
+6,34346,species,Wilson's Warbler,Cardellina pusilla,,Marsh,US-CA,07 May 2026,L49201708,S334299646,,1
+7,16890,species,Olive-sided Flycatcher,Contopus cooperi,,Marsh,US-CA,03 May 2026,L50576349,S332057412,,1
+8,33559,species,Yellow-breasted Chat,Icteria virens,,Marsh,US-CA,03 May 2026,L48600448,S331973510,,1
+9,34087,species,Northern Yellow Warbler,Setophaga aestiva,,Marsh,US-CA,02 May 2026,L49201708,S331177047,,1
+10,33833,species,Brown-headed Cowbird,Molothrus ater,,Marsh,US-CA,02 May 2026,L50576349,S331128278,,1
+11,17323,species,Ash-throated Flycatcher,Myiarchus cinerascens,,Marsh,US-CA,02 May 2026,L50576349,S331128133,,1
+12,267,species,Snow Goose,Anser caerulescens,,Marsh,US-CA,13 Apr 2026,L49668294,S321411589,,1
+13,2031,species,Eurasian Collared-Dove,Streptopelia decaocto,,Marsh,US-CA,10 Apr 2026,L62425371,S319812585,N,1
+14,24106,species,Northern Rough-winged Swallow,Stelgidopteryx serripennis,,Marsh,US-CA,10 Apr 2026,L62425371,S319798891,,1
+15,27813,species,European Starling,Sturnus vulgaris,,Cerritos Park,US-CA,29 Mar 2026,L61332247,S314574318,N,1
+16,17461,species,Cassin's Kingbird,Tyrannus vociferans,,Cerritos Park,US-CA,29 Mar 2026,L61332247,S314574235,,1
+17,6931,species,Pacific Loon,Gavia pacifica,,Manhattan Beach Pier,US-CA,22 Mar 2026,L60841583,S312201339,,1
+18,21476,species,Black-billed Magpie,Pica hudsonia,,Steamboat,US-CO,02 Mar 2026,L59496571,S305446947,,1
+19,21181,species,Canada Jay,Perisoreus canadensis,,Steamboat,US-CO,02 Mar 2026,L59496571,S305393260,,1
+20,3038,species,Greater Roadrunner,Geococcyx californianus,,Marsh,US-CA,22 Feb 2026,L48601161,S303074697,,1
+21,32609,species,Lesser Goldfinch,Spinus psaltria,,Marsh,US-CA,15 Feb 2026,L48600448,S301024234,,1
+22,6051,species,Marbled Godwit,Limosa fedoa,,Bolsa Chica,US-CA,01 Feb 2026,L57934851,S297540639,,1
+23,6521,species,Ring-billed Gull,Larus delawarensis,,Marsh,US-CA,16 Jan 2026,L48599427,S294576525,,1
+24,673,species,Ring-necked Duck,Aythya collaris,,Pond 2-3,US-CA,16 Jan 2026,L47458075,S294576132,,1
+25,33196,species,Golden-crowned Sparrow,Zonotrichia atricapilla,,Golden Gardens,US-WA,29 Dec 2025,L56529405,S291039275,,1
+26,748,species,Barrow's Goldeneye,Bucephala islandica,,Carkeek Park,US-WA,29 Dec 2025,L56283885,S291016564,,1
+27,27362,species,Bewick's Wren,Thryomanes bewickii,,Carkeek Park,US-WA,28 Dec 2025,L56283885,S290807831,,1
+28,26848,species,Golden-crowned Kinglet,Regulus satrapa,,Carkeek Park,US-WA,27 Dec 2025,L56283885,S290579473,,1
+29,27288,species,Pacific Wren,Troglodytes pacificus,,Carkeek Park,US-WA,27 Dec 2025,L56283885,S290567381,,1
+30,10306,species,Belted Kingfisher,Megaceryle alcyon,,Carkeek Park,US-WA,27 Dec 2025,L56283885,S290566659,,1
+31,6596,species,Glaucous-winged Gull,Larus glaucescens,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290025109,,1
+32,728,species,Surf Scoter,Melanitta perspicillata,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290024262,,1
+33,27026,species,Brown Creeper,Certhia americana,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290016288,,1
+34,21624,species,Common Raven,Corvus corax,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290011097,,1
+35,22094,species,Chestnut-backed Chickadee,Poecile rufescens,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290010219,,1
+36,28633,species,American Robin,Turdus migratorius,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290009180,,1
+37,743,species,Common Goldeneye,Bucephala clangula,,Carkeek Park,US-WA,24 Dec 2025,L56283885,S290006794,,1
+38,22065,species,Black-capped Chickadee,Poecile atricapillus,,Union Bay Natural Area,US-WA,23 Dec 2025,L56252803,S289869844,,1
+39,8367,species,Bald Eagle,Haliaeetus leucocephalus,,Union Bay Natural Area,US-WA,23 Dec 2025,L56252803,S289865497,,1
+40,8064,species,Golden Eagle,Aquila chrysaetos,,Union Bay Natural Area,US-WA,23 Dec 2025,L56252803,S289866313,,1
+41,21274,species,Steller's Jay,Cyanocitta stelleri,,Union Bay Natural Area,US-WA,23 Dec 2025,L56252803,S289874598,,1
+42,754,species,Hooded Merganser,Lophodytes cucullatus,,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,06 Dec 2025,L109339,S287514134,,1
+43,17029,species,Vermilion Flycatcher,Pyrocephalus rubinus,,Marsh,US-CA,06 Dec 2025,L48467811,S287524035,,1
+44,29888,species,Cedar Waxwing,Bombycilla cedrorum,,Marsh,US-CA,02 Dec 2025,L49201960,S287071164,,1
+45,7724,species,Western Cattle-Egret,Ardea ibis,,Marsh,US-CA,02 Dec 2025,L49670911,S287070118,,1
+46,31534,species,House Sparrow,Passer domesticus,,Schats,US-CA,23 Nov 2025,L55395113,S285838547,N,1
+47,33851,species,Brewer's Blackbird,Euphagus cyanocephalus,,Schats,US-CA,23 Nov 2025,L55395014,S285838177,,1
+48,33124,species,Dark-eyed Junco,Junco hyemalis,,Huntington Beach Park East,US-CA,11 Nov 2025,L55034188,S284071324,,1
+49,17010,species,Say's Phoebe,Sayornis saya,,Huntington Beach Park East,US-CA,11 Nov 2025,L55034188,S284071056,,1
+50,34206,species,Townsend's Warbler,Setophaga townsendi,,Huntington Beach Park East,US-CA,11 Nov 2025,L55034188,S284070796,,1
+51,26844,species,Ruby-crowned Kinglet,Corthylio calendula,,Huntington Beach Park East,US-CA,11 Nov 2025,L55034188,S284070831,,1
+52,11400,species,Downy Woodpecker,Dryobates pubescens,,Huntington Beach Park East,US-CA,11 Nov 2025,L55034188,S284068443,,1
+53,34058,species,American Redstart,Setophaga ruticilla,,Huntington Beach Park East,US-CA,11 Nov 2025,L55034188,S284064795,,1
+54,6731,species,Forster's Tern,Sterna forsteri,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284050143,,1
+55,33244,species,Savannah Sparrow,Passerculus sandwichensis,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51981386,S284035890,,1
+56,7591,species,Yellow-crowned Night Heron,Nyctanassa violacea,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51981386,S284034577,,1
+57,7629,species,Little Blue Heron,Egretta caerulea,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284033946,,1
+58,7630,species,Tricolored Heron,Egretta tricolor,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284033332,,1
+59,314,species,Brant,Branta bernicla,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284032489,,1
+60,742,species,Bufflehead,Bucephala albeola,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284028445,,1
+61,700,species,Lesser Scaup,Aythya affinis,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284027716,,1
+62,770,species,Red-breasted Merganser,Mergus serrator,,Bolsa Chica State Park,US-CA,11 Nov 2025,L51979363,S284026289,,1
+63,28114,species,Northern Mockingbird,Mimus polyglottos,,Marsh,US-CA,08 Nov 2025,L49201708,S283504342,,1
+64,12028,species,American Kestrel,Falco sparverius,,Marsh,US-CA,04 Nov 2025,L50576349,S282881433,,1
+65,594,species,Northern Pintail,Anas acuta,,Back Bay Trail,US-CA,01 Nov 2025,L54684188,S282426571,,1
+66,517,species,American Wigeon,Mareca americana,,Back Bay Trail,US-CA,01 Nov 2025,L54684188,S282425834,,1
+67,33187,species,White-crowned Sparrow,Zonotrichia leucophrys,,Marsh,US-CA,31 Oct 2025,L49409669,S282238450,,1
+68,34159,species,Yellow-rumped Warbler,Setophaga coronata,,Marsh,US-CA,31 Oct 2025,L49201708,S282238299,,1
+69,27123,species,Blue-gray Gnatcatcher,Polioptila caerulea,,Marsh,US-CA,31 Oct 2025,L52185256,S282237435,,1
+70,8324,species,Northern Harrier,Circus hudsonius,,Marsh,US-CA,31 Oct 2025,L52185256,S282237766,,1
+71,6876,species,Eared Grebe,Podiceps nigricollis,,Marsh,US-CA,31 Oct 2025,L49409669,S282237721,,1
+72,5369,species,Buff-banded Rail,Gallirallus philippensis,,Botanical Gardens,AU-QLD,25 Oct 2025,L54419400,S281176853,,1
+73,19784,species,Pied Butcherbird,Cracticus nigrogularis,,Broadbeach,AU-QLD,24 Oct 2025,L54387610,S281026978,,1
+74,21861,species,Eastern Yellow Robin,Eopsaltria australis,,Coombabah Lake,AU-QLD,23 Oct 2025,L54357238,S280879144,,1
+75,19604,species,Olive-backed Oriole,Oriolus sagittatus,,Coombabah Lake,AU-QLD,23 Oct 2025,L54357238,S280878462,,1
+76,10179,species,Sacred Kingfisher,Todiramphus sanctus,,Coombabah Lake,AU-QLD,23 Oct 2025,L54357238,S280877361,,1
+77,7528,species,Royal Spoonbill,Platalea regia,,Coombabah Lake,AU-QLD,23 Oct 2025,L54357238,S280877378,,1
+78,6133,species,Gray-tailed Tattler,Tringa brevipes,,Esplanade Boardwalk,AU-QLD,21 Oct 2025,L54256873,S280587801,,1
+79,7650,species,Little Egret,Egretta garzetta,,Esplanade Boardwalk,AU-QLD,21 Oct 2025,L54256873,S280587251,,1
+80,6181,species,Sharp-tailed Sandpiper,Calidris acuminata,,Esplanade Boardwalk,AU-QLD,21 Oct 2025,L54256873,S280586714,,1
+81,6186,species,Red-necked Stint,Calidris ruficollis,,Esplanade Boardwalk,AU-QLD,21 Oct 2025,L54256873,S280586464,,1
+82,6024,species,Far Eastern Curlew,Numenius madagascariensis,,Esplanade Boardwalk,AU-QLD,21 Oct 2025,L54256873,S280585346,,1
+83,7661,species,White-faced Heron,Egretta novaehollandiae,,Cairns Night Market,AU-QLD,21 Oct 2025,L54228958,S280583887,,1
+84,30117,species,Mistletoebird,Dicaeum hirundinaceum,,Smithfield,AU-QLD,21 Oct 2025,L54297680,S280582102,,1
+85,18194,species,Helmeted Friarbird,Philemon buceroides,,Kuranda,AU-QLD,21 Oct 2025,L54294993,S280571040,,1
+86,7741,species,Plumed Egret,Ardea plumifera,,Cairns Night Market,AU-QLD,20 Oct 2025,L54228958,S280444979,,1
+87,7641,species,Pacific Reef-Heron,Egretta sacra,,Cairns Night Market,AU-QLD,20 Oct 2025,L54228958,S280444914,,1
+88,6673,species,Bridled Tern,Onychoprion anaethetus,,Moore Reef,AU-QLD,20 Oct 2025,L54264516,S280424142,,1
+89,6792,species,Great Crested Tern,Thalasseus bergii,,Cairns Harbor,AU-QLD,20 Oct 2025,L54261017,S280408117,,1
+90,17873,species,Varied Honeyeater,Gavicalis versicolor,,North Esplanade Boardwalk,AU-QLD,20 Oct 2025,L54257590,S280394321,,1
+91,2841,species,Torresian Imperial-Pigeon,Ducula spilorrhoa,,Esplanade Boardwalk,AU-QLD,20 Oct 2025,L54256873,S280392883,,1
+92,2233,species,Peaceful Dove,Geopelia placida,,North Esplanade Boardwalk,AU-QLD,20 Oct 2025,L54257590,S280392406,,1
+93,7610,species,Nankeen Night Heron,Nycticorax caledonicus,,Esplanade Boardwalk,AU-QLD,20 Oct 2025,L54256873,S280389941,,1
+94,19738,species,White-breasted Woodswallow,Artamus leucorynchus,,Esplanade Boardwalk,AU-QLD,20 Oct 2025,L54256873,S280389082,,1
+95,19708,species,Australasian Figbird,Sphecotheres vieilloti,,Shangri La Gardens,AU-QLD,20 Oct 2025,L54255920,S280386577,,1
+96,27698,species,Metallic Starling,Aplonis metallica,,Shangri La Gardens,AU-QLD,20 Oct 2025,L54255920,S280384674,,1
+97,24184,species,Welcome Swallow,Hirundo neoxena,,Cairns Night Market,AU-QLD,20 Oct 2025,L54228958,S280390312,,1
+98,5750,species,Bush Thick-knee,Burhinus grallarius,,Cairns Night Market,AU-QLD,19 Oct 2025,L54228958,S280258742,,1
+99,18079,species,Brown Honeyeater,Lichmera indistincta,,Cairns Airport,AU-QLD,19 Oct 2025,L54223303,S280235913,,1
+100,17661,species,Variegated Fairywren,Malurus lamberti,,Sydney Harbor National Park,AU-NSW,17 Oct 2025,L54126667,S279794065,,1
+101,6840,species,Australasian Grebe,Tachybaptus novaehollandiae,,Old Quarry Swamp,AU-NSW,17 Oct 2025,L54126493,S279793220,,1
+102,7414,species,Pied Cormorant,Phalacrocorax varius,,Manly Beach,AU-NSW,17 Oct 2025,L54125663,S279789591,,1
+104,17670,species,Superb Fairywren,Malurus cyaneus,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279611825,,1
+105,7375,species,Australasian Darter,Anhinga novaehollandiae,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279611058,,1
+106,685,species,Hardhead,Aythya australis,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279610586,,1
+107,7801,species,Australian Pelican,Pelecanus conspicillatus,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279610248,,1
+108,5525,species,Australasian Swamphen,Porphyrio melanotus,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279609314,,1
+109,5487,species,Eurasian Coot,Fulica atra,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279609444,,1
+110,379,species,Black Swan,Cygnus atratus,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279610426,,1
+111,534,species,Pacific Black Duck,Anas superciliosa,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279608702,,1
+112,20270,species,Willie-wagtail,Rhipidura leucophrys,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279608894,,1
+113,12480,species,Crimson Rosella,Platycercus elegans,,Blue Mountains,AU-NSW,15 Oct 2025,L54058384,S279436426,,1
+114,18309,species,White-browed Scrubwren,Sericornis frontalis,,Blue Mountains,AU-NSW,15 Oct 2025,L54058123,S279435350,,1
+115,17504,species,Superb Lyrebird,Menura novaehollandiae,,Blue Mountains,AU-NSW,15 Oct 2025,L54058123,S279435295,,1
+116,421,species,Ruddy Shelduck,Tadorna ferruginea,,Taronga Zoo,AU-NSW,14 Oct 2025,L54024714,S279266433,,1
+117,1573,species,Indian Peafowl,Pavo cristatus,,Taronga Zoo,AU-NSW,14 Oct 2025,L54025426,S279264653,P,1
+118,10028,species,Laughing Kookaburra,Dacelo novaeguineae,,Taronga Zoo,AU-NSW,14 Oct 2025,L54024714,S279260928,,1
+119,795,species,Australian Brushturkey,Alectura lathami,,Taronga Zoo,AU-NSW,14 Oct 2025,L54021770,S279245757,,1
+120,19807,species,Pied Currawong,Strepera graculina,,Taronga Zoo,AU-NSW,14 Oct 2025,L54022048,S279247108,,1
+121,27859,species,Common Myna,Acridotheres tristis,,Darling Harbor,AU-NSW,13 Oct 2025,L53987830,S279068718,N,1
+122,1853,species,Rock Pigeon,Columba livia,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53986696,S279062803,N,1
+123,21608,species,Australian Raven,Corvus coronoides,,China Town,AU-NSW,13 Oct 2025,L53985843,S279058912,,1
+124,5891,species,Masked Lapwing,Vanellus miles,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279040104,,1
+125,19793,species,Australian Magpie,Gymnorhina tibicen,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279039401,,1
+126,7413,species,Little Black Cormorant,Phalacrocorax sulcirostris,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279038469,,1
+127,7377,species,Little Pied Cormorant,Microcarbo melanoleucos,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279038603,,1
+128,5478,species,Dusky Moorhen,Gallinula tenebrosa,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279038702,,1
+129,2212,species,Crested Pigeon,Ocyphaps lophotes,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279038956,,1
+130,20947,species,Magpie-lark,Grallina cyanoleuca,,Royal Botanical Garden,AU-NSW,13 Oct 2025,L53981687,S279038338,,1
+131,19773,species,Gray Butcherbird,Cracticus torquatus,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53981484,S279037618,,1
+132,459,species,Maned Duck,Chenonetta jubata,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53981484,S279037385,,1
+133,12212,species,Sulphur-crested Cockatoo,Cacatua galerita,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53981123,S279036233,,1
+134,12680,species,Rainbow Lorikeet,Trichoglossus moluccanus,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53981123,S279035822,,1
+135,17808,species,Noisy Miner,Manorina melanocephala,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53981123,S279035666,,1
+136,7498,species,Australian Ibis,Threskiornis molucca,,Royal Botanical Gardens,AU-NSW,13 Oct 2025,L53980834,S279034408,,1
+137,6463,species,Silver Gull,Chroicocephalus novaehollandiae,,Circular Quay,AU-NSW,12 Oct 2025,L53935481,S278818315,,1
+138,33973,species,Orange-crowned Warbler,Leiothlypis celata,5,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+139,33779,species,Red-winged Blackbird,Agelaius phoeniceus,15,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+140,33682,species,Hooded Oriole,Icterus cucullatus,1,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+141,25253,species,Bushtit,Psaltriparus minimus,40,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+142,24187,species,Barn Swallow,Hirundo rustica,25,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+143,24051,species,Bank Swallow,Riparia riparia,1,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+144,8487,species,Red-shouldered Hawk,Buteo lineatus,1,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+145,7832,species,Osprey,Pandion haliaetus,1,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+146,6528,species,Western Gull,Larus occidentalis,3,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+149,485,species,Blue-winged Teal,Spatula discors,2,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,1
+150,7843,species,White-tailed Kite,Elanus leucurus,,Marsh,US-CA,06 Sep 2025,L49409669,S271825364,,1
+151,6231,species,Western Sandpiper,Calidris mauri,,Marsh,US-CA,06 Sep 2025,L49409669,S271818958,,1
+152,6227,species,Pectoral Sandpiper,Calidris melanotos,,Marsh,US-CA,06 Sep 2025,L49409669,S271818820,,1
+153,6226,species,Least Sandpiper,Calidris minutilla,,Marsh,US-CA,06 Sep 2025,L49409669,S271818921,,1
+154,6183,species,Stilt Sandpiper,Calidris himantopus,,Marsh,US-CA,06 Sep 2025,L49409669,S271820738,,1
+155,6177,species,Ruff,Calidris pugnax,,Marsh,US-CA,06 Sep 2025,L49409669,S271821375,,1
+156,6121,species,Red-necked Phalarope,Phalaropus lobatus,,Marsh,US-CA,06 Sep 2025,L49409669,S271819238,,1
+157,612,species,Green-winged Teal,Anas crecca,,Marsh,US-CA,06 Sep 2025,L49409669,S271818581,,1
+158,505,species,Gadwall,Mareca strepera,,Marsh,US-CA,06 Sep 2025,L49409669,S271822926,,1
+159,501,species,Northern Shoveler,Spatula clypeata,,Marsh,US-CA,06 Sep 2025,L49409669,S271818240,,1
+160,487,species,Cinnamon Teal,Spatula cyanoptera,,Marsh,US-CA,06 Sep 2025,L49409669,S271818174,,1
+161,25619,species,Swinhoe's White-eye,Zosterops simplex,,Marsh,US-CA,06 Sep 2025,L50576349,S271806914,P,1
+162,31076,species,Scaly-breasted Munia,Lonchura punctulata,,Stream,US-CA,03 Sep 2025,L49672049,S271351175,N,1
+163,4814,species,Anna's Hummingbird,Calypte anna,,Marsh,US-CA,29 Aug 2025,L49201708,S270269312,,1
+164,6126,species,Spotted Sandpiper,Actitis macularius,,Marsh,US-CA,29 Aug 2025,L49670911,S270268197,,1
+165,24281,species,Cliff Swallow,Petrochelidon pyrrhonota,,Marsh,US-CA,26 Aug 2025,L49201960,S269751350,,1
+166,6748,species,Common Tern,Sterna hirundo,,Marsh,US-CA,26 Aug 2025,L49201960,S269750443,,1
+167,5468,species,Common Gallinule,Gallinula galeata,,Marsh,US-CA,26 Aug 2025,L49201960,S269750295,,1
+168,6789,species,Royal Tern,Thalasseus maximus,,Bolsa Chica State Park,US-CA,24 Aug 2025,L51981386,S269295790,,1
+169,6021,species,Long-billed Curlew,Numenius americanus,,Bolsa Chica State Park,US-CA,24 Aug 2025,L51979363,S269287394,,1
+170,7634,species,Reddish Egret,Egretta rufescens,,Bolsa Chica State Park,US-CA,24 Aug 2025,L51979022,S269286049,,1
+171,6147,species,Willet,Tringa semipalmata,,Bolsa Chica State Park,US-CA,24 Aug 2025,L51975906,S269272785,,1
+172,4831,species,Allen's Hummingbird,Selasphorus sasin,,Marsh,US-CA,09 Aug 2025,L51262527,S266108806,,1
+173,28054,species,California Thrasher,Toxostoma redivivum,,Marsh,US-CA,09 Aug 2025,L50353833,S266105029,,1
+174,11410,species,Nuttall's Woodpecker,Dryobates nuttallii,,Marsh,US-CA,09 Aug 2025,L50353833,S266105067,,1
+175,6888,species,Western Grebe,Aechmophorus occidentalis,,Marsh,US-CA,09 Aug 2025,L48467811,S266090468,,1
+176,34028,species,Common Yellowthroat,Geothlypis trichas,,Marsh,US-CA,09 Aug 2025,L48467811,S266084656,,1
+177,8506,species,Red-tailed Hawk,Buteo jamaicensis,,Stream,US-CA,09 Aug 2025,L47459861,S266110388,,1
+178,6061,species,Long-billed Dowitcher,Limnodromus scolopaceus,,Marsh,US-CA,01 Aug 2025,L48467811,S264327096,,1
+179,33350,species,California Towhee,Melozone crissalis,,Marsh,US-CA,27 Jul 2025,L50576229,S263180526,,1
+180,6855,species,Pied-billed Grebe,Podilymbus podiceps,,Stream,US-CA,27 Jul 2025,L49740515,S263167368,,1
+181,32310,species,House Finch,Haemorhous mexicanus,,Marsh,US-CA,23 Jul 2025,L50353833,S262257425,,1
+182,7791,species,American White Pelican,Pelecanus erythrorhynchos,,Marsh,US-CA,23 Jul 2025,L49201960,S262262009,,1
+183,5827,species,Killdeer,Charadrius vociferus,,Stream,US-CA,13 Jul 2025,L49740515,S259647919,,1
+184,2412,species,Mourning Dove,Zenaida macroura,,Stream,US-CA,12 Jul 2025,L49672049,S259353725,,1
+185,28136,species,Western Bluebird,Sialia mexicana,,Marsh,US-CA,12 Jul 2025,L49671879,S259353128,,1
+186,21557,species,American Crow,Corvus brachyrhynchos,,Marsh,US-CA,12 Jul 2025,L49670911,S259349081,,1
+187,16998,species,Black Phoebe,Sayornis nigricans,,Marsh,US-CA,12 Jul 2025,L49668294,S259338180,,1
+188,33277,species,Song Sparrow,Melospiza melodia,,Pond 6-4,US-CA,11 Jul 2025,L47458904,S259025909,,1
+189,778,species,Ruddy Duck,Oxyura jamaicensis,,Marsh,US-CA,11 Jul 2025,L48467811,S259015943,,1
+190,7424,species,Double-crested Cormorant,Nannopterum auritum,,Marsh,US-CA,11 Jul 2025,L49201960,S259019459,,1
+191,6718,species,Caspian Tern,Hydroprogne caspia,,Marsh,US-CA,08 Jul 2025,L49410394,S258247554,,1
+192,417,species,Egyptian Goose,Alopochen aegyptiaca,,Marsh,US-CA,08 Jul 2025,L49201708,S258245196,P,1
+193,6154,species,Greater Yellowlegs,Tringa melanoleuca,,Marsh,US-CA,08 Jul 2025,L49409669,S258244959,,1
+194,5780,species,American Avocet,Recurvirostra americana,,Marsh,US-CA,05 Jul 2025,L49201708,S257344923,,1
+195,7729,species,Great Egret,Ardea alba,,Marsh,US-CA,05 Jul 2025,L49201960,S257345794,,1
+196,7468,species,White-faced Ibis,Plegadis chihi,,Marsh,US-CA,05 Jul 2025,L49201708,S257344835,,1
+197,8278,species,Cooper's Hawk,Astur cooperii,,Spectrum,US-CA,01 Jul 2025,L48896480,S256030484,,1
+198,7645,species,Snowy Egret,Egretta thula,,Marsh,US-CA,27 Jun 2025,L48467811,S254711307,,1
+199,342,species,Canada Goose,Branta canadensis,,Marsh,US-CA,27 Jun 2025,L48599427,S254708339,,1
+200,6622,species,Black Skimmer,Rynchops niger,,Pond 2-3,US-CA,27 Jun 2025,L47458075,S254708267,,1
+201,7792,species,Brown Pelican,Pelecanus occidentalis,,Marsh,US-CA,27 Jun 2025,L48599427,S254708408,,1
+202,7704,species,Green Heron,Butorides virescens,,Marsh,US-CA,27 Jun 2025,L48599117,S254707105,,1
+203,7600,species,Black-crowned Night Heron,Nycticorax nycticorax,,Marsh,US-CA,27 Jun 2025,L48601161,S254715028,,1
+204,6891,species,Clark's Grebe,Aechmophorus clarkii,,Marsh,US-CA,27 Jun 2025,L48601161,S254715049,,1
+205,5500,species,American Coot,Fulica americana,,Marsh,US-CA,25 Jun 2025,L48467811,S254130375,,1
+206,5770,species,Black-necked Stilt,Himantopus mexicanus,,Marsh,US-CA,25 Jun 2025,L48467811,S254130261,,1
+207,545,species,Mallard,Anas platyrhynchos,,Stream,US-CA,12 Jun 2025,L47459861,S249640403,,1
+208,24064,species,Tree Swallow,Tachycineta bicolor,,Pond 6-4,US-CA,12 Jun 2025,L47458904,S249636121,,1
+209,7753,species,Great Blue Heron,Ardea herodias,,Pond 5-3,US-CA,12 Jun 2025,L47458538,S249634249,,1
+210,33386,species,Spotted Towhee,Pipilo maculatus,,Pond 2-3,US-CA,12 Jun 2025,L47458075,S249632151,,1
+103,275,species,Graylag Goose,Anser anser,,Centennial Park,AU-NSW,16 Oct 2025,L54089330,S279612022,X,0
+147,6235,spuh,peep sp.,Calidris sp. (peep sp.),15,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,0
+148,6062,slash,Short-billed/Long-billed Dowitcher,Limnodromus griseus/scolopaceus,5,"IRWD San Joaquin Marsh & Wildlife Sanctuary, Irvine",US-CA,14 Sep 2025,L109339,S273646563,,0
