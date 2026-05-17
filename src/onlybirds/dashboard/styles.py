@@ -59,5 +59,21 @@ iframe[title^="streamlit_folium"] {min-height: 78vh;}
 [data-testid="stHorizontalBlock"]:has(input[placeholder*="search name or"]):not(:has([data-testid="stSelectbox"])) > [data-testid="stColumn"]:nth-child(2) button:disabled {
     visibility: hidden !important;
 }
+
+/* On mobile, Streamlit columns stay side-by-side and squeeze the search
+   input down to ~20% of the viewport. Stack the filter row vertically.
+   The inner search + × clear block keeps its own `flex-wrap: nowrap` and
+   per-column overrides above (higher specificity), so it stays inline. */
+@media (max-width: 640px) {
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        row-gap: 6px !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+}
 </style>
 """
