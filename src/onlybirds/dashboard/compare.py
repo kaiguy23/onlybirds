@@ -194,7 +194,7 @@ def _presence_strip_html(
     )
 
 
-def render_compare(data: DashboardData) -> None:
+def render_compare(data: DashboardData, db_path: str | None = None) -> None:
     """Side-by-side compare of selected hotspots/consolidations."""
     current = _compare_ids()
     # Deep links arrive with `?compare=` populated but localStorage empty;
@@ -408,6 +408,13 @@ def render_compare(data: DashboardData) -> None:
         key_prefix=f"compare_{','.join(current)}",
         has_last_seen=True,
     )
+    if db_path is not None:
+        from onlybirds.dashboard.semantic_widget import render_semantic_search
+        sorted_union = render_semantic_search(
+            sorted_union,
+            key_prefix=f"compare_{','.join(current)}",
+            db_path=db_path,
+        )
     if sorted_union.empty:
         st.info("No species match these filters.")
         return

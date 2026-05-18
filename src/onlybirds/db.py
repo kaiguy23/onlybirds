@@ -102,8 +102,31 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+_SPECIES_INFO_EXTRA_COLUMNS = (
+    ("ebird_id_text", "TEXT"),
+    ("ebird_fetched_at", "TEXT"),
+    ("embedding", "BLOB"),
+    ("embedding_source_hash", "TEXT"),
+    ("embedding_model", "TEXT"),
+)
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """Idempotently add columns missing from `species_info`.
+
+    SQLite has no `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, so we read
+    `PRAGMA table_info` and only run ALTERs for columns that don't yet exist.
+    Safe to call on every connection.
+    """
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(species_info)")}
+    for name, decl in _SPECIES_INFO_EXTRA_COLUMNS:
+        if name not in existing:
+            conn.execute(f"ALTER TABLE species_info ADD COLUMN {name} {decl}")
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _ensure_columns(conn)
     conn.commit()
 
 

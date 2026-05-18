@@ -413,7 +413,7 @@ def _hotspots_by_species(data: DashboardData) -> dict[str, pd.DataFrame]:
     return {str(code): group for code, group in named.groupby("species_code")}
 
 
-def render_targets(data: DashboardData) -> None:
+def render_targets(data: DashboardData, db_path: str | None = None) -> None:
     targets = data.targets
     seasonality = data.seasonality
     hotspots = data.hotspots
@@ -467,6 +467,14 @@ def render_targets(data: DashboardData) -> None:
         has_last_seen=True,
         region_options=region_options,
     )
+    # Semantic search is only meaningful when the species pool has been narrowed
+    # — on the unfiltered global target list, "small gray bird" matches half the
+    # corpus and the LLM narration loses value. Gate on an active region.
+    if active_regions and db_path is not None:
+        from onlybirds.dashboard.semantic_widget import render_semantic_search
+        filtered = render_semantic_search(
+            filtered, key_prefix="targets", db_path=db_path,
+        )
     total_rare = int((targets["is_rare"] == 1).sum())
     shown_rare = int((filtered["is_rare"] == 1).sum())
     st.caption(

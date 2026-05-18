@@ -16,6 +16,9 @@ dependencies = [
     "platformdirs>=4.2",
     "python-dotenv>=1.0",
     "tqdm>=4.66",
+    "google-genai>=0.3",
+    "selectolax>=0.3",
+    "numpy>=1.26",
 ]
 
 [project.scripts]

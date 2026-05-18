@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 from dotenv import load_dotenv
 
-from . import consolidate, db, enrich, hotspots, ingest, rare, seasonality, targets
+from . import consolidate, db, ebird_id, embeddings, enrich, hotspots, ingest, rare, seasonality, targets
 from .ebird import EBirdClient
 from .ingest import pick_latest_csv
 
@@ -36,33 +36,41 @@ def run(
         csv = pick_latest_csv(csv)
         typer.echo(f"  using latest CSV: {csv}")
     with db.session(db_path) as conn, EBirdClient() as client:
-        typer.echo(f"[1/7] ingesting {csv}…")
+        typer.echo(f"[1/9] ingesting {csv}…")
         s1 = ingest.ingest_csv(conn, client, csv)
         typer.echo(f"      {s1}")
 
-        typer.echo(f"[2/7] fetching hotspots within {radius} km of ({lat}, {lon})…")
+        typer.echo(f"[2/9] fetching hotspots within {radius} km of ({lat}, {lon})…")
         s2 = hotspots.fetch_nearby(conn, client, lat, lon, radius_km=radius, days_back=days_back, force=force_refresh)
         typer.echo(f"      {s2}")
 
-        typer.echo(f"[3/7] consolidating hotspots within {consolidate_radius_km} km…")
+        typer.echo(f"[3/9] consolidating hotspots within {consolidate_radius_km} km…")
         s3 = consolidate.consolidate_hotspots(conn, radius_km=consolidate_radius_km)
         typer.echo(f"      {s3}")
 
-        typer.echo("[4/7] sampling historical obs for seasonality…")
+        typer.echo("[4/9] sampling historical obs for seasonality…")
         s4 = seasonality.compute_seasonality(conn, client, force=force_refresh)
         typer.echo(f"      {s4}")
 
-        typer.echo("[5/7] computing target birds (hotspot − life list)…")
+        typer.echo("[5/9] computing target birds (hotspot − life list)…")
         s5 = targets.compute_targets(conn)
         typer.echo(f"      {s5}")
 
-        typer.echo(f"[6/7] flagging rare targets (last {rare_days} days within {rare_radius} km)…")
+        typer.echo(f"[6/9] flagging rare targets (last {rare_days} days within {rare_radius} km)…")
         s6 = rare.mark_rare(conn, client, lat, lon, radius_km=rare_radius, days_back=rare_days)
         typer.echo(f"      {s6}")
 
-        typer.echo("[7/7] enriching with Wikipedia…")
+        typer.echo("[7/9] enriching with Wikipedia…")
         s7 = enrich.enrich_species(conn, force=force_refresh)
         typer.echo(f"      {s7}")
+
+        typer.echo("[8/9] scraping eBird ID text…")
+        s8 = ebird_id.enrich_ebird_id_text(conn, force=force_refresh)
+        typer.echo(f"      {s8}")
+
+        typer.echo("[9/9] computing embeddings…")
+        s9 = embeddings.recompute_embeddings(conn, force=force_refresh)
+        typer.echo(f"      {s9}")
 
     typer.echo(f"\nDone. Run `onlybirds serve --db {db_path}` to view the dashboard.")
 

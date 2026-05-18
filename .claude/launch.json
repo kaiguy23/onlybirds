@@ -4,7 +4,7 @@
     {
       "name": "streamlit",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "streamlit", "run", "dashboard/app.py", "--server.port", "8501", "--server.headless", "true", "--", "--db", "data/onlybirds.db"],
+      "runtimeArgs": ["run", "streamlit", "run", "streamlit_app.py", "--server.port", "8501", "--server.headless", "true"],
       "port": 8501
     }
   ]

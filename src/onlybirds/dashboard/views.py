@@ -39,6 +39,11 @@ from onlybirds.dashboard.regions import (
     _region_chips_panel,
     _region_mask,
 )
+from onlybirds.dashboard.semantic_widget import (
+    apply_semantic_search,
+    current_description,
+    render_semantic_search,
+)
 from onlybirds.dashboard.targets_view import (
     _filter_target_rows,
     _hotspots_by_species,
@@ -100,7 +105,47 @@ def _top_hotspots_panel(
     render_top_hotspots_strip(rows_payload)
 
 
-def render_map(data: DashboardData) -> None:
+def _build_places_by_code(
+    hotspot_targets: pd.DataFrame,
+    hotspots: pd.DataFrame,
+    consolidated_targets: pd.DataFrame,
+    consolidated: pd.DataFrame,
+) -> dict[str, list[dict]]:
+    """Build `{species_code: [{type, id, name}, …]}` for the in-view places.
+
+    The chat widget stores this on each assistant bubble so its top-K matches
+    render with clickable links into the visible hotspots / consolidated
+    areas. Cap each species at 4 places to keep bubbles compact.
+    """
+    hotspot_names = dict(zip(hotspots["hotspot_id"], hotspots["name"], strict=False))
+    cons_names = dict(
+        zip(consolidated["consolidated_id"], consolidated["name"], strict=False)
+    )
+    by_code: dict[str, list[dict]] = {}
+    if not hotspot_targets.empty:
+        for _, row in hotspot_targets[["species_code", "hotspot_id"]].iterrows():
+            code = row["species_code"]
+            hid = row["hotspot_id"]
+            bucket = by_code.setdefault(code, [])
+            if len(bucket) >= 4:
+                continue
+            bucket.append(
+                {"type": "hotspot", "id": hid, "name": hotspot_names.get(hid) or hid}
+            )
+    if not consolidated_targets.empty:
+        for _, row in consolidated_targets[["species_code", "consolidated_id"]].iterrows():
+            code = row["species_code"]
+            cid = row["consolidated_id"]
+            bucket = by_code.setdefault(code, [])
+            if len(bucket) >= 4:
+                continue
+            bucket.append(
+                {"type": "area", "id": cid, "name": cons_names.get(cid) or cid}
+            )
+    return by_code
+
+
+def render_map(data: DashboardData, db_path: str) -> None:
     hotspots = data.hotspots
     hotspot_targets = data.hotspot_targets
     consolidated = data.consolidated_hotspots
@@ -138,6 +183,36 @@ def render_map(data: DashboardData) -> None:
         if singletons.empty and consolidated.empty:
             st.info("No hotspots in the selected regions.")
             return
+
+    # "Describe the bird" chat — only re-ranks when a region is selected
+    # (otherwise the corpus is the entire DB and the answer isn't view-
+    # specific). The matches snapshot stored on each assistant bubble carries
+    # the in-view hotspot + consolidated-area links, so the user sees
+    # clickable "where to go" results inside the chat itself rather than in a
+    # separate main-column panel.
+    if active_regions:
+        kept_hids = set(singletons["hotspot_id"])
+        ht_filtered = hotspot_targets[hotspot_targets["hotspot_id"].isin(kept_hids)]
+        species_in_view = pd.concat(
+            [
+                ht_filtered[["species_code", "common_name", "is_rare"]],
+                consolidated_targets[["species_code", "common_name", "is_rare"]],
+            ],
+            ignore_index=True,
+        ).drop_duplicates(subset="species_code")
+        species_df = species_in_view.merge(
+            data.targets[["species_code", "summary", "image_url", "wiki_url"]],
+            on="species_code",
+            how="left",
+        )
+        places_by_code = _build_places_by_code(
+            ht_filtered, singletons, consolidated_targets, consolidated
+        )
+        apply_semantic_search(
+            species_df,
+            db_path=db_path,
+            places_by_code=places_by_code,
+        )
 
     _top_hotspots_panel(singletons, consolidated)
 
@@ -400,8 +475,12 @@ def render_consolidated_detail(
         value=False,
         key=f"show_all_{consolidated_id}",
     )
+    # When the sidebar chat has a description, widen the pool to every species
+    # observed here so the bird-ID flow can rank against life-list birds too —
+    # "describe what I saw" naturally includes already-seen species.
+    use_all = show_all or bool(current_description())
 
-    if show_all:
+    if use_all:
         filtered = load_consolidated_all_species(db_path, consolidated_id).copy()
         if filtered.empty:
             st.info("No species recorded across these hotspots yet.")
@@ -446,8 +525,13 @@ def render_consolidated_detail(
     sorted_filtered = _filter_target_rows(
         filtered,
         data.seasonality,
-        key_prefix=f"consolidated_{consolidated_id}_{'all' if show_all else 'targets'}",
+        key_prefix=f"consolidated_{consolidated_id}_{'all' if use_all else 'targets'}",
         has_last_seen=True,
+    )
+    sorted_filtered = render_semantic_search(
+        sorted_filtered,
+        key_prefix=f"consolidated_{consolidated_id}_{'all' if use_all else 'targets'}",
+        db_path=db_path,
     )
     st.caption(f"showing {len(sorted_filtered)} of {total_label}")
     if sorted_filtered.empty:
@@ -537,8 +621,12 @@ def render_hotspot_detail(
         value=False,
         key=f"show_all_{hotspot_id}",
     )
+    # When the sidebar chat has a description, widen the pool to every species
+    # observed here so the bird-ID flow can rank against life-list birds too —
+    # "describe what I saw" naturally includes already-seen species.
+    use_all = show_all or bool(current_description())
 
-    if show_all:
+    if use_all:
         filtered = load_hotspot_all_species(db_path, hotspot_id).copy()
         if filtered.empty:
             st.info("No species recorded at this hotspot yet.")
@@ -583,8 +671,13 @@ def render_hotspot_detail(
     sorted_filtered = _filter_target_rows(
         filtered,
         data.seasonality,
-        key_prefix=f"hotspot_{hotspot_id}_{'all' if show_all else 'targets'}",
+        key_prefix=f"hotspot_{hotspot_id}_{'all' if use_all else 'targets'}",
         has_last_seen=True,
+    )
+    sorted_filtered = render_semantic_search(
+        sorted_filtered,
+        key_prefix=f"hotspot_{hotspot_id}_{'all' if use_all else 'targets'}",
+        db_path=db_path,
     )
     st.caption(f"showing {len(sorted_filtered)} of {total_label}")
     if sorted_filtered.empty:

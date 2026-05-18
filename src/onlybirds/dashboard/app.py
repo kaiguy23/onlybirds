@@ -12,6 +12,7 @@ import streamlit as st
 from onlybirds import db
 from onlybirds.dashboard.compare import render_compare
 from onlybirds.dashboard.data import load_data
+from onlybirds.dashboard.semantic_widget import render_sidebar_input
 from onlybirds.dashboard.styles import _PAGE_CSS
 from onlybirds.dashboard.targets_view import render_targets
 from onlybirds.dashboard.views import (
@@ -40,10 +41,15 @@ def main() -> None:
 
     data = load_data(args.db)
 
+    # Persistent "describe the bird" input in the left sidebar — visible on
+    # every view, so the user can refine their query without losing place in a
+    # detail page.
+    render_sidebar_input()
+
     # Routing: ?view=compare for the compare view, ?hotspot=<id> or
     # ?consolidated=<id> for detail views.
     if st.query_params.get("view") == "compare":
-        render_compare(data)
+        render_compare(data, args.db)
         return
     consolidated_id = st.query_params.get("consolidated")
     if consolidated_id:
@@ -56,9 +62,9 @@ def main() -> None:
 
     tab_map, tab_list = st.tabs(["Map", "Target list"])
     with tab_map:
-        render_map(data)
+        render_map(data, args.db)
     with tab_list:
-        render_targets(data)
+        render_targets(data, args.db)
 
 
 if __name__ == "__main__":
