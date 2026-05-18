@@ -54,8 +54,11 @@ EXAMPLE_PROMPTS: list[tuple[str, str]] = [
 
 _CHAT_CSS = """
 <style>
-/* Sidebar width — default ~244px squeezes long narrations into a thin column. */
-section[data-testid='stSidebar']{min-width:360px !important; max-width:420px !important;}
+/* Sidebar width — default ~244px squeezes long narrations into a thin column.
+   Scope to the expanded state (aria-expanded='true') so the override doesn't
+   fight Streamlit's collapse animation; without this, clicking « leaves the
+   sidebar visible AND Streamlit also renders its » expand button. */
+section[data-testid='stSidebar'][aria-expanded='true']{min-width:360px !important; max-width:420px !important;}
 
 /* Chat layout. Rows flex left/right by role; bubbles cap at 85% so the
    asymmetry reads as a conversation rather than a list of stacked blocks. */
