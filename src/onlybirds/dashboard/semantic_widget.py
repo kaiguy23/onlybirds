@@ -28,7 +28,8 @@ import streamlit as st
 
 from onlybirds import db
 from onlybirds.dashboard.urls import _consolidated_url, _hotspot_url
-from onlybirds.semantic_search import narrate_top_matches, rank_species
+from onlybirds.dashboard.utils import _ebird_species_url
+from onlybirds.semantic_search import narrate_top_matches_stream, rank_species
 
 DEFAULT_TOP_K = 10
 
@@ -37,6 +38,10 @@ DEFAULT_TOP_K = 10
 CHAT_KEY = "semantic_chat"
 PENDING_KEY = "semantic_chat_pending"
 INPUT_KEY = "semantic_chat_input"
+# Bridges the streaming placeholder from `render_sidebar_input` (where it's
+# created) to `apply_semantic_search` (which runs later in the same script
+# pass and streams tokens into it).
+STREAM_PH_KEY = "_semantic_chat_stream_ph"
 
 # Quick-debug prompts — one-click submissions so you can shake the chat
 # end-to-end without typing. Order is rough field-mark progression: solid
@@ -122,10 +127,10 @@ def _matches_html(matches: list[dict]) -> str:
     for m in matches:
         name = html.escape(str(m.get("common_name") or m.get("species_code") or "?"))
         sim = float(m.get("similarity") or 0.0)
-        wiki = m.get("wiki_url") or ""
+        ebird = _ebird_species_url(m.get("species_code")) or ""
         name_html = (
-            f"<a href='{html.escape(wiki)}' target='_blank'>{name}</a>"
-            if wiki
+            f"<a href='{html.escape(ebird)}' target='_blank' rel='noopener'>{name}</a>"
+            if ebird
             else f"<strong>{name}</strong>"
         )
         place_links: list[str] = []
@@ -158,19 +163,35 @@ def _matches_html(matches: list[dict]) -> str:
     return f"<ul class='ob-matches'>{''.join(items)}</ul>"
 
 
+def _chat_row(side: str, inner: str) -> str:
+    return (
+        f"<div class='ob-chat-row ob-chat-row--{side}'>"
+        f"<div class='ob-chat-bubble ob-chat-bubble--{side}'>{inner}</div>"
+        f"</div>"
+    )
+
+
+def _streaming_bubble_html(text: str) -> str:
+    """In-progress assistant bubble; empty `text` shows 'Thinking…'."""
+    if text:
+        body = html.escape(text).replace("\n", "<br>")
+        inner = f"<p>{body}</p>"
+    else:
+        inner = "<span class='ob-typing'>Thinking…</span>"
+    # Wrapped in its own `.ob-chat` so spacing matches the committed transcript
+    # above; on rerun the placeholder is gone and the finalized message renders
+    # inside that main transcript blob.
+    return f"<div class='ob-chat'>{_chat_row('assistant', inner)}</div>"
+
+
 def _message_html(msg: dict) -> str:
-    """Render a single chat message as a flex row + bubble."""
     role = msg.get("role", "user")
     content = html.escape(msg.get("content") or "").replace("\n", "<br>")
     side = "user" if role == "user" else "assistant"
     inner = f"<p>{content}</p>"
     if role == "assistant" and msg.get("matches"):
         inner += _matches_html(msg["matches"])
-    return (
-        f"<div class='ob-chat-row ob-chat-row--{side}'>"
-        f"<div class='ob-chat-bubble ob-chat-bubble--{side}'>{inner}</div>"
-        f"</div>"
-    )
+    return _chat_row(side, inner)
 
 
 def _chat() -> list[dict]:
@@ -217,6 +238,23 @@ def _send_example(prompt: str) -> None:
     st.session_state[PENDING_KEY] = True
 
 
+def _chat_is_active() -> bool:
+    """The chat only re-ranks meaningful when the species corpus is narrowed.
+
+    Top-level Map / Target list with no region selected sees the full DB, where
+    'small gray bird' matches half the corpus. Region-filtered list views and
+    the detail/compare views are all narrowed by construction, so the chat is
+    meaningful there. Drive the gate off URL params so we don't have to thread
+    a flag through every view.
+    """
+    qp = st.query_params
+    if qp.get("view") == "compare":
+        return True
+    if qp.get("hotspot") or qp.get("consolidated"):
+        return True
+    return bool((qp.get("region") or "").strip())
+
+
 def render_sidebar_input() -> None:
     """Render the persistent chat in `st.sidebar` (transcript + input + clear).
 
@@ -235,6 +273,17 @@ def render_sidebar_input() -> None:
 
     with st.sidebar:
         st.markdown("### 🔎 Describe the bird")
+
+        if not _chat_is_active():
+            # Hint keeps the feature discoverable; the input itself is
+            # suppressed because typing without a narrowed corpus is a
+            # confusing dead end.
+            st.caption(
+                "Pick a region (or open a hotspot / consolidated area) to "
+                "narrow the species pool, then describe what you saw here."
+            )
+            return
+
         st.caption(
             "Type what you saw. Follow-ups refine the description — "
             "e.g. 'longer tail' or 'near water'. The current view's species "
@@ -265,15 +314,16 @@ def render_sidebar_input() -> None:
         # layout. Each assistant message inlines its matches snapshot directly
         # inside the bubble.
         rows_html = "".join(_message_html(m) for m in _chat())
-        if st.session_state.get(PENDING_KEY):
-            rows_html += (
-                "<div class='ob-chat-row ob-chat-row--assistant'>"
-                "<div class='ob-chat-bubble ob-chat-bubble--assistant'>"
-                "<span class='ob-typing'>Thinking…</span>"
-                "</div></div>"
-            )
         if rows_html:
             st.markdown(f"<div class='ob-chat'>{rows_html}</div>", unsafe_allow_html=True)
+
+        # In-progress bubble. The placeholder is created here but written into
+        # from `apply_semantic_search` (which runs later in the same script
+        # pass) so tokens can stream in as they arrive from Gemini.
+        if st.session_state.get(PENDING_KEY):
+            ph = st.empty()
+            st.session_state[STREAM_PH_KEY] = ph
+            ph.markdown(_streaming_bubble_html(""), unsafe_allow_html=True)
 
         # Input + clear. `on_change` on a text_input fires when the user hits
         # Enter; we use a fresh key after submit (cleared in _on_submit) so
@@ -317,7 +367,6 @@ def _build_matches_snapshot(
             "species_code": code,
             "common_name": row.get("common_name") or code,
             "similarity": float(row.get("similarity") or 0.0),
-            "wiki_url": (row.get("wiki_url") or "") if "wiki_url" in row else "",
         }
         if places_by_code and code in places_by_code:
             match["places"] = places_by_code[code]
@@ -388,7 +437,24 @@ def apply_semantic_search(
                 if chat and chat[-1].get("role") == "user"
                 else description
             )
-            narration = narrate_top_matches(latest_user, merged, history=history)
+
+            # Stream into the sidebar placeholder set up by `render_sidebar_input`.
+            # If it's missing (caller forgot to render the sidebar, or the
+            # script flow changed), fall back to accumulating silently — the
+            # final message still lands in the transcript on rerun.
+            ph = st.session_state.pop(STREAM_PH_KEY, None)
+            accumulated = ""
+            for chunk in narrate_top_matches_stream(
+                latest_user, merged, history=history
+            ):
+                accumulated += chunk
+                if ph is not None:
+                    ph.markdown(
+                        _streaming_bubble_html(accumulated),
+                        unsafe_allow_html=True,
+                    )
+
+            narration = accumulated.strip() or None
             matches = _build_matches_snapshot(merged, places_by_code)
             _chat().append(
                 {
@@ -399,8 +465,8 @@ def apply_semantic_search(
                 }
             )
             st.session_state[PENDING_KEY] = False
-            # Rerun so the sidebar transcript picks up the new assistant turn
-            # immediately. Without this, the bubble lags one interaction.
+            # Rerun so the streaming placeholder collapses into the committed
+            # transcript blob (otherwise the bubble would briefly render twice).
             st.rerun()
 
         return merged

@@ -80,8 +80,8 @@ def test_rank_caps_at_top_k(conn, monkeypatch):
     assert len(ranked) == 2
 
 
-def test_narrate_returns_none_when_no_api_key(monkeypatch):
+def test_narrate_stream_yields_nothing_when_no_api_key(monkeypatch):
     import pandas as pd
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     df = pd.DataFrame({"common_name": ["X"], "sci_name": ["Y"], "similarity": [0.9], "ebird_id_text": ["t"]})
-    assert semantic_search.narrate_top_matches("q", df) is None
+    assert list(semantic_search.narrate_top_matches_stream("q", df)) == []

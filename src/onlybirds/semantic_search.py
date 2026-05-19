@@ -5,16 +5,16 @@ pool of species_codes (already narrowed by hotspot/region/rarity filters in
 the calling view), return the top-K species by cosine similarity against the
 Gemini-embedded ID text we cached in `species_info.embedding`.
 
-`narrate_top_matches` is an optional Gemini Flash one-shot that turns the
-top-K candidates into a 1–3 sentence narration ("Top guess: Mountain
-Chickadee — fits the gray-with-black-cap description, common at this
-hotspot in May"). It always degrades to no narration on failure; ranked
-results never depend on the LLM succeeding.
+`narrate_top_matches_stream` is an optional Gemini Flash call that yields a
+1–3 sentence narration in chunks ("Top guess: Mountain Chickadee — fits the
+gray-with-black-cap description, common at this hotspot in May"). It always
+degrades to no narration on failure; ranked results never depend on the LLM
+succeeding.
 """
 
 import os
 import sqlite3
-from typing import Iterable
+from typing import Iterable, Iterator
 
 import pandas as pd
 from google import genai
@@ -60,31 +60,32 @@ def _narration_client() -> genai.Client | None:
     return genai.Client(api_key=key)
 
 
-def narrate_top_matches(
+_SYSTEM_INSTRUCTION = (
+    "You are a bird ID assistant helping narrow down a sighting. Each user "
+    "turn refines the description. Top candidates (by embedding similarity "
+    "to the cumulative description) are listed below the user message — "
+    "the UI shows the species list separately, so DON'T re-list them. "
+    "Each candidate's `ID:` field is its eBird Identification paragraph; "
+    "it includes size/shape ('tiny', 'small songbird', 'medium-sized "
+    "warbler', 'large raptor', body proportions, bill shape, tail length), "
+    "plumage, and behavior. USE that info — especially size and shape — "
+    "to justify your top guess and distinguish close alternatives. "
+    "Write a clear answer: name your top guess and the field marks that "
+    "lock it in (size + one or two distinguishing marks); if the user is "
+    "following up, say whether the new detail shifts the answer or "
+    "confirms it; if the top two candidates are within 0.05 similarity, "
+    "mention the alternative and what would distinguish them. Plain "
+    "prose, no markdown, no bullet points, finish every sentence."
+)
+
+
+def _build_narration_contents(
     query: str,
     candidates: pd.DataFrame,
     *,
     history: list[dict] | None = None,
-) -> str | None:
-    """Generate a short narration over the top candidates.
-
-    `candidates` carries: common_name, sci_name, ebird_id_text (or summary),
-    similarity, and optionally recent-sighting context (recent_count,
-    last_seen, in_season).
-
-    `history` is an optional list of prior `{role, content}` turns from the
-    sidebar chat. When provided, the model sees the conversation so far and
-    treats `query` as the latest user message — letting follow-ups like "but
-    it had a longer tail" refine the prior answer instead of restarting. The
-    candidate list is always derived from the *cumulative* description (the
-    caller's job), so this only affects narration style, not ranking.
-
-    Returns None on any failure so callers can skip rendering without raising.
-    """
-    client = _narration_client()
-    if client is None or candidates.empty:
-        return None
-
+) -> list[types.ContentDict]:
+    """Shape the Gemini `contents` payload — shared with any future one-shot call."""
     lines = []
     for _, row in candidates.head(5).iterrows():
         bits = [f"- {row['common_name']}"]
@@ -106,31 +107,13 @@ def narrate_top_matches(
             line += f"\n  ID: {id_text}"
         lines.append(line)
 
-    system_instruction = (
-        "You are a bird ID assistant helping narrow down a sighting. Each user "
-        "turn refines the description. Top candidates (by embedding similarity "
-        "to the cumulative description) are listed below the user message — "
-        "the UI shows the species list separately, so DON'T re-list them. "
-        "Each candidate's `ID:` field is its eBird Identification paragraph; "
-        "it includes size/shape ('tiny', 'small songbird', 'medium-sized "
-        "warbler', 'large raptor', body proportions, bill shape, tail length), "
-        "plumage, and behavior. USE that info — especially size and shape — "
-        "to justify your top guess and distinguish close alternatives. "
-        "Write a clear answer: name your top guess and the field marks that "
-        "lock it in (size + one or two distinguishing marks); if the user is "
-        "following up, say whether the new detail shifts the answer or "
-        "confirms it; if the top two candidates are within 0.05 similarity, "
-        "mention the alternative and what would distinguish them. Plain "
-        "prose, no markdown, no bullet points, finish every sentence."
-    )
-
     candidate_block = "Candidates:\n" + "\n".join(lines)
 
-    # Build a multi-turn `contents` payload as dicts (the SDK's
-    # ContentListUnionDict accepts list[dict]; passing list[Content] also
-    # works at runtime but doesn't satisfy the static union). Prior history
-    # is rendered verbatim; the current user message has the candidate block
-    # appended so the model can reason over both.
+    # Multi-turn payload as dicts (the SDK's ContentListUnionDict accepts
+    # list[dict]; passing list[Content] also works at runtime but doesn't
+    # satisfy the static union). Prior history is rendered verbatim; the
+    # current user message has the candidate block appended so the model can
+    # reason over both.
     contents: list[types.ContentDict] = []
     for turn in history or []:
         role = "user" if turn.get("role") == "user" else "model"
@@ -141,9 +124,41 @@ def narrate_top_matches(
     contents.append(
         {"role": "user", "parts": [{"text": f"{query}\n\n{candidate_block}"}]}
     )
+    return contents
+
+
+def narrate_top_matches_stream(
+    query: str,
+    candidates: pd.DataFrame,
+    *,
+    history: list[dict] | None = None,
+) -> Iterator[str]:
+    """Stream a short narration over the top candidates.
+
+    `candidates` carries: common_name, sci_name, ebird_id_text (or summary),
+    similarity, and optionally recent-sighting context (recent_count,
+    last_seen, in_season).
+
+    `history` is an optional list of prior `{role, content}` turns from the
+    sidebar chat. When provided, the model sees the conversation so far and
+    treats `query` as the latest user message — letting follow-ups like "but
+    it had a longer tail" refine the prior answer instead of restarting. The
+    candidate list is always derived from the *cumulative* description (the
+    caller's job), so this only affects narration style, not ranking.
+
+    Yields nothing on setup failure (no API key, empty candidates) and stops
+    cleanly on mid-stream errors, so callers keep whatever text already
+    arrived. Joining all yielded chunks gives the full narration (callers
+    typically `.strip()` and treat empty as "no narration available").
+    """
+    client = _narration_client()
+    if client is None or candidates.empty:
+        return
+
+    contents = _build_narration_contents(query, candidates, history=history)
 
     try:
-        resp = client.models.generate_content(
+        stream = client.models.generate_content_stream(
             model=NARRATION_MODEL,
             # The SDK accepts list[ContentDict] at runtime (it's documented as
             # the multi-turn shape), but ty resolves the parameter's
@@ -152,13 +167,15 @@ def narrate_top_matches(
             config=types.GenerateContentConfig(
                 temperature=0.2,
                 # No max_output_tokens cap — the system prompt asks for a
-                # focused answer, and the model's natural stopping behavior
+                # focused answer and the model's natural stopping behavior
                 # is the right ceiling. Caps only ever caused mid-sentence
-                # truncation, never saved a meaningful amount of cost.
-                system_instruction=system_instruction,
+                # truncation.
+                system_instruction=_SYSTEM_INSTRUCTION,
             ),
         )
-        text = (resp.text or "").strip()
-        return text or None
+        for chunk in stream:
+            text = getattr(chunk, "text", None) or ""
+            if text:
+                yield text
     except Exception:
-        return None
+        return
