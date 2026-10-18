@@ -3,7 +3,10 @@
 Find birds you haven't seen yet at nearby eBird hotspots, with rare-bird flags and Wikipedia enrichment, served up in a Streamlit + Folium dashboard.
 
 ## Ebird Api Key
-visit https://ebird.org/api/keygen and request a key
+visit https://ebird.org/api/keygen and request a key. Set it as `EBIRD_API_KEY`.
+
+## Carto Api Key
+visit https://carto.com/basemaps/apikey/ and request a key. The dashboard map uses CARTO Positron tiles, which require this key on every tile request. Set it as `CARTO_API_KEY`. The browser loads the tiles, so the key is embedded in the map HTML.
 
 ## How it works
 
@@ -45,7 +48,10 @@ EBIRD_API_KEY=…                 # https://ebird.org/api/keygen
 ONLYBIRDS_LAT=33.88
 ONLYBIRDS_LON=-118.40
 ONLYBIRDS_CONTACT=you@example.com   # or a project URL — used in the Wikipedia User-Agent
+CARTO_API_KEY=…                 # https://carto.com/basemaps/apikey/ — Positron map tiles
 ```
+
+`CARTO_API_KEY` is required for the map. The dashboard raises an error when it is unset. Request one at https://carto.com/basemaps/apikey/.
 
 `ONLYBIRDS_CONTACT` is optional but recommended — Wikimedia throttles requests with vague User-Agents, and you'll see Wikipedia fetches start failing during enrichment without it. The CLI auto-loads `.env` from the cwd, so no `export` needed.
 
@@ -111,6 +117,7 @@ src/onlybirds/
     markers.py      # folium markers + tooltip/popup HTML
     regions.py      # region filter chips
     mini_map.py     # compact map for detail pages
+    basemap.py      # CARTO Positron tiles (CARTO_API_KEY)
     data.py, urls.py, utils.py, styles.py
 life-lists/         # your CSVs go here
 data/               # SQLite db + caches (gitignored)

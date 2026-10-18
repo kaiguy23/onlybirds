@@ -20,7 +20,7 @@ Always-on hosted version. Your laptop can be off. ~30 min setup.
 
 - Push this repo to a public GitHub repo.
 - Deploy via [share.streamlit.io](https://share.streamlit.io).
-- Put `EBIRD_API_KEY` and `ONLYBIRDS_CONTACT` in Streamlit secrets (TOML in the dashboard).
+- Put `EBIRD_API_KEY`, `ONLYBIRDS_CONTACT`, and `CARTO_API_KEY` in Streamlit secrets (TOML in the dashboard). The map tiles are requested by the browser, so the CARTO key has to be present when the dashboard is served.
 - Commit your CSV to `life-lists/` (or upload through a Streamlit file picker each visit).
 - Manually re-run the pipeline locally and push when you want fresh data.
 

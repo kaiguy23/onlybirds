@@ -3,6 +3,7 @@
 import folium
 import streamlit as st
 
+from onlybirds.dashboard.basemap import positron_map
 from onlybirds.dashboard.urls import _hotspot_url
 
 
@@ -26,7 +27,7 @@ def _detail_location_map(
     lats = [float(p["lat"]) for p in points]
     lons = [float(p["lon"]) for p in points]
     center = [sum(lats) / len(lats), sum(lons) / len(lons)]
-    m = folium.Map(location=center, zoom_start=zoom, tiles="cartodbpositron")
+    m = positron_map(location=center, zoom_start=zoom)
     if len(points) > 1:
         m.fit_bounds(
             [[min(lats), min(lons)], [max(lats), max(lons)]],

@@ -9,6 +9,7 @@ import streamlit as st
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 
+from onlybirds.dashboard.basemap import positron_map
 from onlybirds.dashboard.compare import (
     MAX_COMPARE,
     _compare_ids,
@@ -221,7 +222,7 @@ def render_map(data: DashboardData, db_path: str) -> None:
     lats = list(singletons["lat"]) + list(consolidated["lat"])
     lons = list(singletons["lon"]) + list(consolidated["lon"])
     center = [sum(lats) / len(lats), sum(lons) / len(lons)]
-    m = folium.Map(location=center, zoom_start=10, tiles="cartodbpositron")
+    m = positron_map(location=center, zoom_start=10)
     if active_regions and len(lats) > 1:
         m.fit_bounds(
             [[min(lats), min(lons)], [max(lats), max(lons)]],
