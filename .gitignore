@@ -13,3 +13,6 @@ wheels/
 data/*
 !data/onlybirds.db
 .env
+
+# macOS
+.DS_Store
