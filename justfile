@@ -13,7 +13,7 @@ run csv lat="" lon="" radius="25":
     uv run onlybirds run --csv {{csv}} {{ if lat != "" { "--lat " + lat } else { "" } }} {{ if lon != "" { "--lon " + lon } else { "" } }} --radius {{radius}}
 
 # Run the pipeline against the most recent CSV in life-lists/ (parsed from MM-DD-YYYY.csv). lat/lon fall back to ONLYBIRDS_LAT/LON in .env.
-latest lat="" lon="" radius="25":
+latest lat="" lon="" radius="50":
     uv run onlybirds run --csv life-lists/ {{ if lat != "" { "--lat " + lat } else { "" } }} {{ if lon != "" { "--lon " + lon } else { "" } }} --radius {{radius}}
 
 # Launch the Streamlit + folium dashboard.
