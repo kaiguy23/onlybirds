@@ -110,6 +110,7 @@ One-time setup:
    ```
 
    The form stays hidden unless both are set and the viewer's email (from Community Cloud's login) is listed.
+3. **Optional:** `GOOGLE_MAPS_API_KEY` (in both the Streamlit secrets and the repo secrets) looks places up with Google's Geocoding API instead of OpenStreetMap. It handles landmarks and loose spellings better. Restrict the key to the Geocoding API.
 
 Each run uses up to a couple of hours of your eBird quota, so keep the app's sharing set to invited viewers only.
 

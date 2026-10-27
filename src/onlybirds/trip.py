@@ -4,9 +4,11 @@ The refresh itself is `.github/workflows/trip.yml`, which runs the pipeline for
 the given point (waiting out eBird's hourly quota) and commits the DB; Streamlit
 Cloud redeploys on that push. This module is the dashboard's and CLI's way in:
 
-- `geocode` resolves a free-text place ("Austin, TX") with OpenStreetMap's
-  Nominatim, whose policy asks for an identifying User-Agent and at most one
-  request per second — fine for a form you submit by hand.
+- `geocode` resolves a free-text place ("Austin, TX", "Golden Gate Park").
+  With GOOGLE_MAPS_API_KEY set it uses Google's Geocoding API, which matches
+  landmarks and loose spellings better; otherwise OpenStreetMap's Nominatim
+  (no key; its policy asks for an identifying User-Agent and at most one
+  request per second — fine for a form you submit by hand).
 - `dispatch` and `recent_runs` call the GitHub REST API with a fine-grained
   token that only needs "Actions: read and write" on this repo.
 """
@@ -18,6 +20,7 @@ from typing import Any
 import httpx
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 GITHUB_API = "https://api.github.com"
 DEFAULT_REPO = "kaiguy23/onlybirds"
 WORKFLOW_FILE = "trip.yml"
@@ -54,6 +57,9 @@ def geocode(query: str, client: httpx.Client | None = None, timeout: float = 15.
     query = query.strip()
     if not query:
         raise TripError("enter a city or place name")
+    google_key = (os.environ.get("GOOGLE_MAPS_API_KEY") or "").strip()
+    if google_key:
+        return _geocode_google(query, google_key, client, timeout)
     c = client or httpx.Client(timeout=timeout)
     try:
         r = c.get(
@@ -71,6 +77,27 @@ def geocode(query: str, client: httpx.Client | None = None, timeout: float = 15.
         raise TripError(f"no place found for {query!r}")
     h = hits[0]
     return Place(name=h.get("display_name") or query, lat=float(h["lat"]), lon=float(h["lon"]))
+
+
+def _geocode_google(query: str, key: str, client: httpx.Client | None, timeout: float) -> Place:
+    c = client or httpx.Client(timeout=timeout)
+    try:
+        r = c.get(GOOGLE_GEOCODE_URL, params={"address": query, "key": key, "language": "en"})
+    finally:
+        if client is None:
+            c.close()
+    if r.status_code >= 400:
+        raise TripError(f"geocoding failed ({r.status_code})")
+    body = r.json()
+    status = body.get("status")
+    if status == "ZERO_RESULTS":
+        raise TripError(f"no place found for {query!r}")
+    if status != "OK":
+        # REQUEST_DENIED / OVER_QUERY_LIMIT etc. come back as 200 with an error_message.
+        raise TripError(f"Google geocoding: {status} {body.get('error_message', '')}".strip())
+    h = body["results"][0]
+    loc = h["geometry"]["location"]
+    return Place(name=h.get("formatted_address") or query, lat=float(loc["lat"]), lon=float(loc["lng"]))
 
 
 def _github(token: str, client: httpx.Client | None) -> httpx.Client:

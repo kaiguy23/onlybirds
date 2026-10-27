@@ -10,6 +10,11 @@ def _mock(handler) -> httpx.Client:
     return httpx.Client(base_url=trip.GITHUB_API, transport=httpx.MockTransport(handler))
 
 
+@pytest.fixture(autouse=True)
+def no_google_key(monkeypatch):
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
+
+
 def test_geocode_best_hit(monkeypatch):
     monkeypatch.setenv("ONLYBIRDS_CONTACT", "me@example.com")
     seen: list[httpx.Request] = []
@@ -33,6 +38,29 @@ def test_geocode_no_match():
 def test_geocode_blank():
     with pytest.raises(trip.TripError):
         trip.geocode("  ")
+
+
+def test_geocode_google_when_key_set(monkeypatch):
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "gk")
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(200, json={"status": "OK", "results": [
+            {"formatted_address": "Golden Gate Park, San Francisco", "geometry": {"location": {"lat": 37.769, "lng": -122.486}}}]})
+
+    p = trip.geocode("golden gate park", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert p == trip.Place("Golden Gate Park, San Francisco", 37.769, -122.486)
+    assert seen[0].url.host == "maps.googleapis.com"
+    assert seen[0].url.params["key"] == "gk"
+
+
+def test_geocode_google_denied(monkeypatch):
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "bad")
+    c = httpx.Client(transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"status": "REQUEST_DENIED", "error_message": "API key invalid"})))
+    with pytest.raises(trip.TripError, match="REQUEST_DENIED"):
+        trip.geocode("x", client=c)
 
 
 def test_dispatch_posts_inputs():

@@ -6,7 +6,8 @@
 # for the quota to recover instead of skipping work (--wait-for-quota).
 #
 # Secrets: EBIRD_API_KEY and GEMINI_API_KEY (required); EBIRD_USERNAME/EBIRD_PASSWORD (optional, to pull
-# today's life list first); ONLYBIRDS_CONTACT (optional, sent in the Wikipedia/Nominatim User-Agent).
+# today's life list first); ONLYBIRDS_CONTACT (optional, sent in the Wikipedia/Nominatim User-Agent);
+# GOOGLE_MAPS_API_KEY (optional, geocodes the city with Google instead of OpenStreetMap).
 name: trip
 run-name: "trip: ${{ inputs.label || inputs.city || format('{0}, {1}', inputs.lat, inputs.lon) }}"
 
@@ -46,6 +47,7 @@ jobs:
       EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       ONLYBIRDS_CONTACT: ${{ secrets.ONLYBIRDS_CONTACT }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       EBIRD_USERNAME: ${{ secrets.EBIRD_USERNAME }}
       EBIRD_PASSWORD: ${{ secrets.EBIRD_PASSWORD }}
       INPUT_LABEL: ${{ inputs.label || inputs.city || 'new point' }}
