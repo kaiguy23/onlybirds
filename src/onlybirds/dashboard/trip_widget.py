@@ -1,4 +1,5 @@
-"""Sidebar "Plan a trip" form: start a data refresh for a new city from the dashboard.
+"""Sidebar "Plan a trip" form: start a data refresh for a new city from the dashboard,
+or pull your latest eBird life list.
 
 Shown only when GITHUB_TRIP_TOKEN is set (a fine-grained token with "Actions:
 read and write" on this repo) and the viewer is allowed by TRIP_ADMINS — a
@@ -91,11 +92,22 @@ def render_trip_form() -> None:
                 _recent_runs.clear()
                 st.success(f"Started: {point.name} ({point.lat:.3f}, {point.lon:.3f}), {radius} km")
 
+        st.divider()
+        st.caption("Logged new birds? Pull your eBird life list so they drop off the targets (a few minutes).")
+        if st.button("Pull my latest life list", width="stretch"):
+            try:
+                trip.dispatch_lifelist(token)
+            except trip.TripError as e:
+                st.error(str(e))
+            else:
+                _recent_runs.clear()
+                st.success("Started a life list sync.")
+
         try:
             runs = _recent_runs(token)
         except trip.TripError:
             runs = []
         if runs:
-            st.markdown("**Recent trips**")
+            st.markdown("**Recent runs**")
             for run in runs:
                 st.markdown(f"{_status_label(run)} · [{run.title.removeprefix('trip: ')}]({run.url})")

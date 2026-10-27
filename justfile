@@ -28,6 +28,10 @@ overnight lat lon radius="50":
 trip city radius="50":
     gh workflow run trip.yml -f city="{{city}}" -f radius={{radius}}
 
+# Pull your latest life list into the DB in GitHub Actions (no hotspot refresh).
+sync:
+    gh workflow run lifelist.yml
+
 # Launch the Streamlit + folium dashboard.
 serve port="8501":
     uv run onlybirds serve --port {{port}}

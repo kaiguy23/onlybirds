@@ -99,9 +99,11 @@ Hotspot and consolidated-hotspot detail pages default to **targets only** (birds
 - the GitHub app: Actions → trip → Run workflow,
 - `just trip "Austin, TX"` (needs the `gh` CLI).
 
+**Pull your latest life list.** After a day out, `.github/workflows/lifelist.yml` logs into ebird.org with `EBIRD_USERNAME`/`EBIRD_PASSWORD`, downloads your life list, updates `observations` and targets (rare-alert flags are kept), and commits the DB. It takes a few minutes and makes no hotspot calls. Start it from the **Pull my latest life list** button in the same sidebar section, from Actions → lifelist, or with `just sync`. Locally, `onlybirds sync-lifelist` does the same thing.
+
 One-time setup:
 
-1. **Repo secrets** (Settings → Secrets and variables → Actions): `EBIRD_API_KEY`, `GEMINI_API_KEY`; optionally `EBIRD_USERNAME`/`EBIRD_PASSWORD` to pull today's life list first, and `ONLYBIRDS_CONTACT`.
+1. **Repo secrets** (Settings → Secrets and variables → Actions): `EBIRD_API_KEY`, `GEMINI_API_KEY`, `EBIRD_USERNAME`/`EBIRD_PASSWORD` (the life-list sync needs them; trips also use them to pull today's list first), and `ONLYBIRDS_CONTACT`.
 2. **For the dashboard form**, a [fine-grained token](https://github.com/settings/personal-access-tokens/new) for this repo only, with *Actions: Read and write*. Add to the Streamlit app's secrets:
 
    ```toml

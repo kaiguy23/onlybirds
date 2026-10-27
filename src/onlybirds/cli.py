@@ -124,6 +124,23 @@ def fetch_lifelist_cmd(
     typer.echo(f"  saved {path}")
 
 
+@app.command(name="sync-lifelist")
+def sync_lifelist_cmd(
+    out_dir: Path = typer.Option(Path("life-lists"), "--out-dir", help="Directory to write MM-DD-YYYY.csv into."),
+    db_path: Path = typer.Option(db.DEFAULT_DB_PATH, "--db", help="SQLite path."),
+) -> None:
+    """Pull your latest eBird life list into the DB and update targets (no hotspot refresh)."""
+    try:
+        path = lifelist.fetch_life_list(out_dir)
+    except lifelist.LifeListError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    typer.echo(f"  saved {path}")
+    with db.session(db_path) as conn, EBirdClient() as client:
+        typer.echo(f"      {ingest.ingest_csv(conn, client, path)}")
+        typer.echo(f"      {targets.compute_targets(conn, keep_rare=True)}")
+
+
 @app.command()
 def geocode(
     place: str = typer.Argument(..., help='City or place name, e.g. "Austin, TX".'),

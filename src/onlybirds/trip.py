@@ -24,6 +24,7 @@ GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 GITHUB_API = "https://api.github.com"
 DEFAULT_REPO = "kaiguy23/onlybirds"
 WORKFLOW_FILE = "trip.yml"
+LIFELIST_WORKFLOW_FILE = "lifelist.yml"
 
 
 class TripError(RuntimeError):
@@ -123,21 +124,25 @@ def dispatch(
     ref: str = "main",
     client: httpx.Client | None = None,
 ) -> None:
-    """Start the trip workflow for one point. GitHub answers 204 with no run id."""
+    """Start the trip workflow for one point."""
+    inputs = {"lat": f"{lat:.5f}", "lon": f"{lon:.5f}", "radius": str(radius_km), "label": label}
+    _dispatch(token, WORKFLOW_FILE, inputs, repo=repo, ref=ref, client=client)
+
+
+def dispatch_lifelist(
+    token: str, *, repo: str = DEFAULT_REPO, ref: str = "main", client: httpx.Client | None = None
+) -> None:
+    """Start the workflow that pulls your latest eBird life list into the DB."""
+    _dispatch(token, LIFELIST_WORKFLOW_FILE, {}, repo=repo, ref=ref, client=client)
+
+
+def _dispatch(
+    token: str, workflow: str, inputs: dict[str, str], *, repo: str, ref: str, client: httpx.Client | None
+) -> None:
+    # GitHub answers 204 with no run id; recent_runs() picks the run up a moment later.
     c = _github(token, client)
     try:
-        r = c.post(
-            f"/repos/{repo}/actions/workflows/{WORKFLOW_FILE}/dispatches",
-            json={
-                "ref": ref,
-                "inputs": {
-                    "lat": f"{lat:.5f}",
-                    "lon": f"{lon:.5f}",
-                    "radius": str(radius_km),
-                    "label": label,
-                },
-            },
-        )
+        r = c.post(f"/repos/{repo}/actions/workflows/{workflow}/dispatches", json={"ref": ref, "inputs": inputs})
     finally:
         if client is None:
             c.close()
@@ -148,9 +153,10 @@ def dispatch(
 def recent_runs(
     token: str, repo: str = DEFAULT_REPO, limit: int = 5, client: httpx.Client | None = None
 ) -> list[TripRun]:
+    """Latest manually started runs (trips and life-list pulls), newest first."""
     c = _github(token, client)
     try:
-        r = c.get(f"/repos/{repo}/actions/workflows/{WORKFLOW_FILE}/runs", params={"per_page": limit})
+        r = c.get(f"/repos/{repo}/actions/runs", params={"event": "workflow_dispatch", "per_page": limit})
     finally:
         if client is None:
             c.close()

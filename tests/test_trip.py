@@ -86,3 +86,15 @@ def test_recent_runs():
                                   "html_url": "https://github.com/x", "created_at": "2026-10-27T00:00:00Z"}]}
     runs = trip.recent_runs("t", client=_mock(lambda r: httpx.Response(200, json=payload)))
     assert runs == [trip.TripRun("trip: Austin", "completed", "success", "https://github.com/x", "2026-10-27T00:00:00Z")]
+
+
+def test_dispatch_lifelist():
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(204)
+
+    trip.dispatch_lifelist("t", client=_mock(handler))
+    assert seen[0].url.path == "/repos/kaiguy23/onlybirds/actions/workflows/lifelist.yml/dispatches"
+    assert json.loads(seen[0].content) == {"ref": "main", "inputs": {}}
