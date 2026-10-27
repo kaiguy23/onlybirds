@@ -127,6 +127,27 @@ def _consolidated_tooltip_html(
 
 # ---------- Click popups ----------
 
+def _open_app_js(query: str) -> str:
+    """Inline onclick JS that opens an app page (`query` like "?hotspot=L1").
+
+    Popups live in the folium iframe, whose sandbox blocks navigating the
+    parent but has `allow-same-origin` and `allow-popups`. Phones click an
+    anchor created in the parent's own document, so the app navigates in place
+    instead of stacking a Safari tab per tap; desktop opens a new tab (via
+    window.top, as before). Single quotes only: it sits in a double-quoted
+    onclick attribute.
+    """
+    return (
+        "event.preventDefault();"
+        f"var q='{query}';"
+        "try{if(window.matchMedia('(pointer: coarse)').matches){"
+        "var d=window.parent.document,a=d.createElement('a');"
+        "a.href=window.parent.location.pathname+q;a.target='_self';"
+        "d.body.appendChild(a);a.click();return false;}}catch(e){}"
+        "window.open(window.top.location.pathname+q,'_blank');return false;"
+    )
+
+
 def _popup_html(
     hotspot_id: str,
     name: str,
@@ -134,11 +155,8 @@ def _popup_html(
 ) -> str:
     """Click popup: hotspot title (links to detail) + full species list.
 
-    The title link uses target="_blank" + an onclick handler that constructs the
-    parent-page URL via window.top.location.pathname. This works because the
-    iframe sandbox has `allow-popups` (new-tab opening is allowed) and
-    `allow-same-origin` (we can read the parent's pathname). Setting
-    `window.top.location` directly is blocked by the sandbox.
+    The title link's onclick (`_open_app_js`) opens the detail page: in place
+    on phones, in a new tab on desktop.
     """
     # Dedupe species — `hotspot_obs` can have multiple rows per (hotspot, species)
     # if the bird was logged on multiple visits. The SQL orders by last_seen DESC,
@@ -178,11 +196,7 @@ def _popup_html(
         if rows
         else "<i style='color:#888;'>no targets here</i>"
     )
-    js_open = (
-        "event.preventDefault();"
-        f"var u=window.top.location.pathname+'?hotspot={hotspot_id}';"
-        "window.open(u,'_blank');"
-    )
+    js_open = _open_app_js(f"?hotspot={hotspot_id}")
     # The title is the click target. Styled like a link, wraps long names.
     title = (
         f'<a href="?hotspot={hotspot_id}" target="_blank" '
@@ -220,11 +234,7 @@ def _consolidated_popup_html(
         for _, m in member_rows.iterrows():
             mname = m.get("name") or m["hotspot_id"]
             href = _hotspot_url(m["hotspot_id"])
-            js_open = (
-                "event.preventDefault();"
-                f"var u=window.top.location.pathname+'?hotspot={m['hotspot_id']}';"
-                "window.open(u,'_blank');"
-            )
+            js_open = _open_app_js(f"?hotspot={m['hotspot_id']}")
             member_pill = popup_pill_html(m["hotspot_id"], size="sm")
             members_html_parts.append(
                 f"<li style='margin:2px 0;display:flex;gap:6px;"
@@ -275,11 +285,7 @@ def _consolidated_popup_html(
         else "<div style='margin-top:8px;'><i style='color:#888;'>no targets here</i></div>"
     )
 
-    js_open_title = (
-        "event.preventDefault();"
-        f"var u=window.top.location.pathname+'?consolidated={consolidated_id}';"
-        "window.open(u,'_blank');"
-    )
+    js_open_title = _open_app_js(f"?consolidated={consolidated_id}")
     title = (
         f'<a href="?consolidated={consolidated_id}" target="_blank" '
         f'onclick="{js_open_title}" '

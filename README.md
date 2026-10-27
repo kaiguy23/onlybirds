@@ -108,10 +108,10 @@ One-time setup:
 
    ```toml
    GITHUB_TRIP_TOKEN = "github_pat_…"
-   TRIP_ADMINS = "you@example.com"   # viewers who see the form; "*" = anyone who can open the app
+   TRIP_ADMINS = "*"   # anyone who can open the app; keep the app's sharing invite-only
    ```
 
-   The form stays hidden unless both are set and the viewer's email (from Community Cloud's login) is listed.
+   The form stays hidden unless both are set. `TRIP_ADMINS` can also be a comma-separated list of emails matched against `st.user.email`, but Community Cloud doesn't fill that in for invited viewers (it needs the app's own `st.login`), so `"*"` plus invite-only sharing is the working setup. Secrets edits apply on the next rerun; no reboot needed.
 3. **Optional:** `GOOGLE_MAPS_API_KEY` (in both the Streamlit secrets and the repo secrets) looks places up with Google's Geocoding API instead of OpenStreetMap. It handles landmarks and loose spellings better. Restrict the key to the Geocoding API.
 
 Each run uses up to a couple of hours of your eBird quota, so keep the app's sharing set to invited viewers only.

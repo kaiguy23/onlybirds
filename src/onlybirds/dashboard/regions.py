@@ -120,7 +120,7 @@ def _region_chips_panel(
             _region_chip_html(label, _toggle_region_url(active, key), is_active, region_key=key)
         )
     st.markdown(
-        "<div style='margin:-2px 0 8px 0;'>"
+        "<div class='onlybirds-region-strip' style='margin:-2px 0 8px 0;'>"
         "<span style='color:#666;font-size:11px;font-weight:700;letter-spacing:.06em;"
         "margin-right:8px;text-transform:uppercase;'>Region</span>"
         + "".join(chips)
