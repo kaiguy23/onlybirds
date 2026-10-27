@@ -24,6 +24,10 @@ latest lat="" lon="" radius="50": fetch
 overnight lat lon radius="50":
     uv run onlybirds run --csv life-lists/ --lat {{lat}} --lon {{lon}} --radius {{radius}} --wait-for-quota
 
+# Refresh a trip destination in GitHub Actions (laptop can be off): just trip "Austin, TX" [radius]
+trip city radius="50":
+    gh workflow run trip.yml -f city="{{city}}" -f radius={{radius}}
+
 # Launch the Streamlit + folium dashboard.
 serve port="8501":
     uv run onlybirds serve --port {{port}}

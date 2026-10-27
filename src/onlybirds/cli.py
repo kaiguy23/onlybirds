@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 from dotenv import load_dotenv
 
-from . import consolidate, db, ebird_id, embeddings, enrich, hotspots, ingest, lifelist, rare, seasonality, targets
+from . import consolidate, db, ebird_id, embeddings, enrich, hotspots, ingest, lifelist, rare, seasonality, targets, trip
 from .ebird import EBirdClient
 from .ingest import pick_latest_csv
 
@@ -122,6 +122,23 @@ def fetch_lifelist_cmd(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
     typer.echo(f"  saved {path}")
+
+
+@app.command()
+def geocode(
+    place: str = typer.Argument(..., help='City or place name, e.g. "Austin, TX".'),
+    env: bool = typer.Option(False, "--env", help="Print ONLYBIRDS_LAT=/ONLYBIRDS_LON= lines (for $GITHUB_ENV)."),
+) -> None:
+    """Look up a place's coordinates (OpenStreetMap Nominatim)."""
+    try:
+        p = trip.geocode(place)
+    except trip.TripError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    if env:
+        typer.echo(f"ONLYBIRDS_LAT={p.lat:.5f}\nONLYBIRDS_LON={p.lon:.5f}")
+    else:
+        typer.echo(f"{p.lat:.5f} {p.lon:.5f}  {p.name}")
 
 
 @app.command()
