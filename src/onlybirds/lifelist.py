@@ -1,10 +1,13 @@
 import os
+import ssl
 from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin
 
 import httpx
+
+from onlybirds import tls
 
 LOGIN_URL = "https://ebird.org/login"
 LIFELIST_URL = "https://ebird.org/lifelist"
@@ -53,6 +56,23 @@ def _login(client: httpx.Client, username: str, password: str) -> None:
         raise LifeListError("eBird login failed; check EBIRD_USERNAME / EBIRD_PASSWORD.")
 
 
+def _download(
+    ctx: ssl.SSLContext, timeout: float, username: str | None, password: str | None, session_id: str | None
+) -> httpx.Response:
+    with httpx.Client(
+        headers={"User-Agent": USER_AGENT}, timeout=timeout, follow_redirects=True, verify=ctx
+    ) as client:
+        if username and password:
+            _login(client, username, password)
+        else:
+            client.cookies.set("EBIRD_SESSIONID", session_id or "", domain="ebird.org")
+        return client.get(
+            LIFELIST_URL,
+            params={"r": "world", "time": "life", "fmt": "csv"},
+            headers={"Referer": LIFELIST_URL},
+        )
+
+
 def fetch_life_list(out_dir: Path | str, timeout: float = 30.0) -> Path:
     """Download the world life list CSV to out_dir/MM-DD-YYYY.csv.
 
@@ -66,18 +86,20 @@ def fetch_life_list(out_dir: Path | str, timeout: float = 30.0) -> Path:
     if not (username and password) and not session_id:
         raise LifeListError("set EBIRD_USERNAME and EBIRD_PASSWORD (or EBIRD_SESSIONID) in .env.")
 
-    with httpx.Client(
-        headers={"User-Agent": USER_AGENT}, timeout=timeout, follow_redirects=True
-    ) as client:
-        if username and password:
-            _login(client, username, password)
-        else:
-            client.cookies.set("EBIRD_SESSIONID", session_id or "", domain="ebird.org")
-        r = client.get(
-            LIFELIST_URL,
-            params={"r": "world", "time": "life", "fmt": "csv"},
-            headers={"Referer": LIFELIST_URL},
-        )
+    # eBird's sign-in has been seen sending an incomplete certificate chain;
+    # on a verify failure, fetch the missing intermediate and retry (see tls.py).
+    ctx = tls.default_context()
+    patched: set[str] = set()
+    while True:
+        try:
+            r = _download(ctx, timeout, username, password, session_id)
+            break
+        except httpx.ConnectError as e:
+            host = e.request.url.host
+            if not tls.is_verify_error(e) or host in patched:
+                raise
+            patched.add(host)
+            ctx = tls.with_intermediates(host, ctx)
     if "text/csv" not in r.headers.get("content-type", ""):
         hint = "login didn't stick" if username and password else "EBIRD_SESSIONID has likely expired"
         raise LifeListError(f"eBird returned {r.status_code} ({r.headers.get('content-type')}) instead of a CSV; {hint}.")

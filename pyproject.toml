@@ -19,6 +19,8 @@ dependencies = [
     "google-genai>=0.3",
     "selectolax>=0.3",
     "numpy>=1.26",
+    "cryptography>=42",
+    "certifi>=2024.2.2",
 ]
 
 [project.scripts]
