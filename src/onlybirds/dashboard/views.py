@@ -26,6 +26,8 @@ from onlybirds.dashboard.data import (
 from onlybirds.dashboard.markers import (
     _CLUSTER_ICON_FN,
     _LEGEND_HTML,
+    _MAP_CSS,
+    LazyPopups,
     _consolidated_marker_html,
     _consolidated_popup_html,
     _consolidated_tooltip_html,
@@ -263,6 +265,8 @@ def render_map(data: DashboardData, db_path: str) -> None:
             [[min(lats), min(lons)], [max(lats), max(lons)]],
             padding=(40, 40),
         )
+    popups = LazyPopups()
+    popups.add_to(m)  # before the markers: it hooks their creation
     cluster = MarkerCluster(icon_create_function=_CLUSTER_ICON_FN).add_to(m)
     # Group once instead of filtering per hotspot — avoids N² scan.
     targets_by_hotspot = dict(tuple(hotspot_targets.groupby("hotspot_id", sort=False)))
@@ -275,14 +279,11 @@ def render_map(data: DashboardData, db_path: str) -> None:
         html, diameter = _marker_div_html(target_count, rare_count)
         name = h["name"] or h["hotspot_id"]
         tooltip = folium.Tooltip(_tooltip_html(name, target_count, rare_count))
-        popup = folium.Popup(
-            _popup_html(h["hotspot_id"], name, rows),
-            max_width=320,
-        )
+        popup_key = popups.add(h["hotspot_id"], _popup_html(h["hotspot_id"], name, rows))
         folium.Marker(
             location=[h["lat"], h["lon"]],
             tooltip=tooltip,
-            popup=popup,
+            popup_key=popup_key,
             icon=folium.DivIcon(
                 html=html,
                 icon_size=(diameter, diameter),
@@ -324,14 +325,13 @@ def render_map(data: DashboardData, db_path: str) -> None:
             tooltip = folium.Tooltip(
                 _consolidated_tooltip_html(name, target_count, rare_count, member_count)
             )
-            popup = folium.Popup(
-                _consolidated_popup_html(cid, name, members, ctargets),
-                max_width=340,
+            popup_key = popups.add(
+                f"consolidated:{cid}", _consolidated_popup_html(cid, name, members, ctargets)
             )
             folium.Marker(
                 location=[c["lat"], c["lon"]],
                 tooltip=tooltip,
-                popup=popup,
+                popup_key=popup_key,
                 icon=folium.DivIcon(
                     html=cons_html,
                     icon_size=(cons_d, cons_d),
@@ -352,27 +352,12 @@ def render_map(data: DashboardData, db_path: str) -> None:
     # hotspot set so chips for regions outside the current filter still preview
     # correctly.
     bboxes = _region_bboxes(data.hotspots)
-    # Leaflet's default `.leaflet-tooltip` rule sets `white-space: nowrap`, so
-    # long hotspot names overflow the map. Override inside the iframe so they
-    # wrap at word boundaries up to a sensible max width. Avoid `word-break`
-    # / `overflow-wrap: anywhere` here — they let the tooltip's min-content
-    # collapse to a single character, which produces a 1-char-wide column.
-    root.header.add_child(  # ty: ignore[unresolved-attribute]
-        folium.Element(
-            "<style>"
-            ".leaflet-tooltip{"
-            "white-space:normal !important;"
-            "max-width:260px !important;"
-            "width:max-content !important;"
-            "}"
-            "</style>"
-        )
-    )
+    # Tooltip wrapping, plus the phone layout for popups and the legend.
+    root.header.add_child(folium.Element(_MAP_CSS))  # ty: ignore[unresolved-attribute]
 
     # Click on a marker opens a popup whose title links to the hotspot detail.
     # We don't need st_folium's return value since navigation happens via the
-    # popup link (target="_blank" — opens detail in a new tab; the iframe
-    # sandbox blocks in-tab top-navigation from popup HTML).
+    # popup link (`olbOpen` in markers._MAP_JS).
     st_folium(
         m,
         use_container_width=True,
