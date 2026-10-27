@@ -68,6 +68,8 @@ def geocode(query: str, client: httpx.Client | None = None, timeout: float = 15.
             params={"q": query, "format": "jsonv2", "limit": 1},
             headers={"User-Agent": _user_agent(), "Accept-Language": "en"},
         )
+    except httpx.HTTPError as e:
+        raise TripError(f"couldn't reach the geocoder: {e}") from e
     finally:
         if client is None:
             c.close()
@@ -84,6 +86,8 @@ def _geocode_google(query: str, key: str, client: httpx.Client | None, timeout: 
     c = client or httpx.Client(timeout=timeout)
     try:
         r = c.get(GOOGLE_GEOCODE_URL, params={"address": query, "key": key, "language": "en"})
+    except httpx.HTTPError as e:
+        raise TripError(f"couldn't reach Google geocoding: {type(e).__name__}") from e
     finally:
         if client is None:
             c.close()

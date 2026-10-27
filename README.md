@@ -141,7 +141,7 @@ src/onlybirds/
     compare.py      # hotspot-compare feature (state, tray, view)
     targets_view.py # target species rendering + filter bar
     markers.py      # folium markers + tooltip/popup HTML
-    regions.py      # region filter chips
+    place.py        # place search (?at=lat,lon,radius) shared by Map and Target list
     mini_map.py     # compact map for detail pages
     basemap.py      # CARTO Positron tiles (CARTO_API_KEY)
     trip_widget.py  # sidebar "Plan a trip" form (owner-only)

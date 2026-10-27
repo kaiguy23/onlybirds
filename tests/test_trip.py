@@ -35,6 +35,14 @@ def test_geocode_no_match():
         trip.geocode("Nowhereville", client=c)
 
 
+def test_geocode_unreachable():
+    def handler(req: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("blocked", request=req)
+
+    with pytest.raises(trip.TripError, match="couldn't reach"):
+        trip.geocode("Austin, TX", client=httpx.Client(transport=httpx.MockTransport(handler)))
+
+
 def test_geocode_blank():
     with pytest.raises(trip.TripError):
         trip.geocode("  ")

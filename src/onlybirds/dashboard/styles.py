@@ -60,22 +60,23 @@ iframe[title^="streamlit_folium"] {min-height: 78vh;}
     visibility: hidden !important;
 }
 
-/* Phones. The region chips (often 30+) wrapped into a full screen of pills
-   above the map; make them one swipeable row. Shrink the map to ~60% of the
+/* Phones. Shrink the map to ~60% of the
    screen so a one-finger swipe has page above and below it to scroll — a
    near-full-screen map traps the page. Drop the DB path from the header. */
 @media (max-width: 640px) {
     .block-container {padding-left: 0.75rem !important; padding-right: 0.75rem !important;}
     .onlybirds-header .db {display: none;}
-    .onlybirds-region-strip {
-        display: flex; flex-wrap: nowrap; align-items: center;
-        overflow-x: auto; -webkit-overflow-scrolling: touch;
-        scrollbar-width: none; padding-bottom: 2px;
-    }
-    .onlybirds-region-strip::-webkit-scrollbar {display: none;}
-    .onlybirds-region-strip > * {flex: 0 0 auto; white-space: nowrap; margin-bottom: 0 !important;}
-    .onlybirds-region-chip {padding: 7px 12px !important; font-size: 13px !important;}
     iframe[title^="streamlit_folium"] {min-height: 0; height: 62vh !important;}
+}
+
+/* Place search: keep the box and its Go button, and the radius picker and
+   Clear, on one line on phones (the rule below would stack them). */
+@media (max-width: 640px) {
+    [data-testid="stHorizontalBlock"]:has(input[placeholder^="Search a place"]),
+    .st-key-place_bar [data-testid="stHorizontalBlock"] {flex-wrap: nowrap !important;}
+    .st-key-place_bar [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {flex: 0 1 auto !important; width: auto !important;}
+    [data-testid="stHorizontalBlock"]:has(input[placeholder^="Search a place"]) > [data-testid="stColumn"]:first-child {flex: 1 1 auto !important;}
+    [data-testid="stHorizontalBlock"]:has(input[placeholder^="Search a place"]) > [data-testid="stColumn"]:last-child {flex: 0 0 auto !important; width: auto !important;}
 }
 
 /* On mobile, Streamlit columns stay side-by-side and squeeze the search
