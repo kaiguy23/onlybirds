@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 
 from onlybirds import seasonality
-from onlybirds.ebird import EBirdClient, EBirdError, EBirdObservation
+from onlybirds.ebird import EBirdClient, EBirdError, EBirdObservation, EBirdRateLimited
 from onlybirds.seasonality import _is_fresh, _sample_dates, compute_seasonality
 
 
@@ -20,9 +20,11 @@ class FakeClient:
     Missing keys default to []. Setting a value to an EBirdError raises.
     """
 
-    def __init__(self, obs_by_key: dict | None = None):
+    def __init__(self, obs_by_key: dict | None = None, hourly_remaining: int | None = None):
         self.obs_by_key = obs_by_key or {}
         self.calls: list[tuple] = []
+        self.hourly_remaining = hourly_remaining
+        self.wait_for_quota = False
 
     def region_historic(self, region: str, year: int, month: int, day: int):
         self.calls.append((region, year, month, day))
@@ -45,9 +47,9 @@ class TestSampleDates:
         monkeypatch.setattr(seasonality.dt, "date", _D)
 
         dates = _sample_dates(fake_today, n_months=12)
-        # 12 months × 3 sample days = 36, minus same-month samples that fall on/after today.
-        # SAMPLE_DAYS = (5, 15, 25); today = May 8 → drop May 15, May 25 (May 5 < May 8 stays).
-        assert len(dates) == 36 - 2
+        # 12 months × 1 sample day = 12, minus same-month samples that fall on/after today.
+        # SAMPLE_DAYS = (15,); today = May 8 → drop May 15.
+        assert len(dates) == 12 - 1
         assert all(d < fake_today for d in dates)
 
     def test_clamps_to_last_day_of_month(self, monkeypatch):
@@ -62,8 +64,7 @@ class TestSampleDates:
         monkeypatch.setattr(seasonality.dt, "date", _D)
 
         dates = _sample_dates(dt.date(2026, 2, 28), n_months=1)
-        # Feb 2026 has 28 days; SAMPLE_DAYS (5, 15, 25) all valid.
-        assert sorted(dates) == [dt.date(2026, 2, 5), dt.date(2026, 2, 15), dt.date(2026, 2, 25)]
+        assert sorted(dates) == [dt.date(2026, 2, 15)]
 
     def test_wraps_year_boundary(self, monkeypatch):
         fake_today = dt.date(2026, 5, 8)
@@ -191,6 +192,44 @@ class TestComputeSeasonality:
         assert stats["api_calls"] == 1
         rows = list(conn.execute("SELECT species_code, months FROM species_seasonality"))
         assert json.loads(rows[0]["months"]) == [2]
+
+    def test_rate_limit_keeps_old_rows_and_defers(self, conn, monkeypatch):
+        self._seed_hotspot(conn, region="US-CA")
+        conn.execute(
+            "INSERT INTO hotspots(hotspot_id, name, lat, lon, region, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("L2", "Pond", 41.0, -74.0, "US-NY", "2026-01-01T00:00:00"),
+        )
+        old = (dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(days=45)).isoformat(timespec="seconds")
+        conn.execute(
+            "INSERT INTO species_seasonality(species_code, region, months, fetched_at) "
+            "VALUES (?, ?, ?, ?)",
+            ("norcar", "US-CA", "[5]", old),
+        )
+        sample = [dt.date(2026, 1, 15), dt.date(2026, 2, 15)]
+        monkeypatch.setattr(seasonality, "_sample_dates", lambda *a, **k: sample)
+
+        client = FakeClient(
+            obs_by_key={
+                ("US-CA", 2026, 1, 15): [_obs("blujay")],
+                ("US-CA", 2026, 2, 15): EBirdRateLimited("quota"),
+            }
+        )
+        stats = compute_seasonality(conn, cast(EBirdClient, client))
+        assert stats["regions_fetched"] == 0
+        assert stats["regions_deferred"] == 2
+        assert all(c[0] == "US-CA" for c in client.calls)
+        rows = list(conn.execute("SELECT species_code, months, fetched_at FROM species_seasonality"))
+        assert [(r["species_code"], r["months"], r["fetched_at"]) for r in rows] == [("norcar", "[5]", old)]
+
+    def test_defers_when_budget_too_low(self, conn, monkeypatch):
+        self._seed_hotspot(conn)
+        monkeypatch.setattr(seasonality, "_sample_dates", lambda *a, **k: [dt.date(2026, 1, 15)])
+
+        client = FakeClient(hourly_remaining=seasonality.RESERVED_CALLS)
+        stats = compute_seasonality(conn, cast(EBirdClient, client))
+        assert stats["regions_deferred"] == 1
+        assert client.calls == []
 
     def test_drops_orphaned_regions(self, conn, monkeypatch):
         self._seed_hotspot(conn, region="US-CA")

@@ -1,15 +1,41 @@
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Self
 
 import httpx
+from tqdm import tqdm
 
 BASE_URL = "https://api.ebird.org/v2"
+# The hourly window rolls, so quota trickles back as old requests age out.
+QUOTA_POLL_S = 60.0
+QUOTA_MAX_WAIT_S = 90 * 60.0
 
 
 class EBirdError(RuntimeError):
     pass
+
+
+class EBirdRateLimited(EBirdError):
+    """Hourly request quota is exhausted; retrying before the window rolls is pointless."""
+
+
+# eBird sends e.g. `ratelimit: "policy";r=0,"burst";r=25` — `policy` is the
+# 500/hour quota, `burst` is 25 per 5s.
+_HOURLY_REMAINING_RE = re.compile(r'"policy";r=(\d+)')
+
+
+def _hourly_remaining(headers: httpx.Headers) -> int | None:
+    m = _HOURLY_REMAINING_RE.search(headers.get("ratelimit", ""))
+    return int(m.group(1)) if m else None
+
+
+def _retry_after(headers: httpx.Headers, default: float) -> float:
+    try:
+        return float(headers["retry-after"])
+    except (KeyError, ValueError):
+        return default
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +89,7 @@ class EBirdObservation:
 
 
 class EBirdClient:
-    def __init__(self, api_key: str | None = None, timeout: float = 30.0) -> None:
+    def __init__(self, api_key: str | None = None, timeout: float = 30.0, wait_for_quota: bool = False) -> None:
         key = api_key or os.environ.get("EBIRD_API_KEY")
         if not key:
             raise EBirdError("EBIRD_API_KEY not set. Get one at https://ebird.org/api/keygen")
@@ -72,6 +98,11 @@ class EBirdClient:
             headers={"X-eBirdApiToken": key},
             timeout=timeout,
         )
+        # Requests left in the rolling hourly window, as of the last response.
+        # None until the first response that carries a `ratelimit` header.
+        self.hourly_remaining: int | None = None
+        # Block until the hourly quota recovers instead of raising EBirdRateLimited.
+        self.wait_for_quota = wait_for_quota
 
     def __enter__(self) -> "EBirdClient":
         return self
@@ -80,9 +111,12 @@ class EBirdClient:
         self._client.close()
 
     def _get(self, path: str, *, timeout: float | None = None, **params: Any) -> Any:
-        # crude retry for transient 5xx + 429 + read timeouts
+        # crude retry for transient 5xx + burst 429 + read timeouts
         clean = {k: v for k, v in params.items() if v is not None}
-        for attempt in range(3):
+        attempt = -1
+        quota_waited = 0.0
+        while attempt < 2:
+            attempt += 1
             try:
                 r = self._client.get(path, params=clean, timeout=timeout) if timeout is not None \
                     else self._client.get(path, params=clean)
@@ -91,7 +125,23 @@ class EBirdClient:
                     time.sleep(2 ** attempt)
                     continue
                 raise EBirdError(f"read timeout after 3 attempts: {path}")
-            if r.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+            remaining = _hourly_remaining(r.headers)
+            if remaining is not None:
+                self.hourly_remaining = remaining
+            if r.status_code == 429:
+                if remaining == 0:
+                    if not self.wait_for_quota or quota_waited >= QUOTA_MAX_WAIT_S:
+                        raise EBirdRateLimited(f"429 {path}: hourly eBird quota exhausted")
+                    if quota_waited == 0:
+                        tqdm.write("  … eBird hourly quota exhausted; waiting for it to recover")
+                    time.sleep(QUOTA_POLL_S)
+                    quota_waited += QUOTA_POLL_S
+                    attempt -= 1
+                    continue
+                if attempt < 2:
+                    time.sleep(_retry_after(r.headers, 2 ** attempt))
+                    continue
+            if r.status_code in (500, 502, 503, 504) and attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
             if r.status_code >= 400:

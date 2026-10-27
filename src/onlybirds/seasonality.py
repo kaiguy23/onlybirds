@@ -7,6 +7,10 @@ and record which months each species shows up in.
 
 Coarse — only "presence per month", no frequency. Cached 30 days because
 seasonality doesn't shift run-to-run.
+
+eBird caps keys at 500 requests per rolling hour, so a run only samples as many
+regions as the remaining quota allows; the rest stay stale and get picked up
+on a later run.
 """
 
 import calendar
@@ -17,11 +21,13 @@ from collections import defaultdict
 
 from tqdm import tqdm
 
-from .ebird import EBirdClient, EBirdError
+from .ebird import EBirdClient, EBirdError, EBirdRateLimited
 
-SAMPLE_DAYS = (5, 15, 25)        # 3 evenly-spaced days per month
+SAMPLE_DAYS = (15,)              # mid-month only — keeps a region at ~12 calls
 MONTHS_HISTORY = 12              # look back this many months
 SEASONALITY_TTL_DAYS = 30
+# Hourly quota left untouched for later pipeline steps (rare-bird alerts is 1 call).
+RESERVED_CALLS = 5
 
 
 def _sample_dates(end_date: dt.date, n_months: int = MONTHS_HISTORY) -> list[dt.date]:
@@ -79,12 +85,29 @@ def compute_seasonality(
         disable=not to_fetch,
     )
 
-    for region in to_fetch:
+    deferred = 0
+    for i, region in enumerate(to_fetch):
+        remaining = client.hourly_remaining
+        if (
+            not client.wait_for_quota
+            and remaining is not None
+            and remaining < len(sample_dates) + RESERVED_CALLS
+        ):
+            deferred = len(to_fetch) - i
+            tqdm.write(
+                f"  ! seasonality: {remaining} eBird calls left this hour — "
+                f"deferring {deferred} region(s) to a later run"
+            )
+            break
         species_months: dict[str, set[int]] = defaultdict(set)
+        rate_limited = False
         for d in sample_dates:
             pbar.set_postfix_str(f"{region} {d.isoformat()}", refresh=False)
             try:
                 obs = client.region_historic(region, d.year, d.month, d.day)
+            except EBirdRateLimited:
+                rate_limited = True
+                break
             except EBirdError as e:
                 # One slow date shouldn't blow up the whole pipeline — coarser
                 # seasonality is better than none.
@@ -97,6 +120,15 @@ def compute_seasonality(
                 if o.species_code:
                     species_months[o.species_code].add(d.month)
             pbar.update(1)
+
+        if rate_limited:
+            # Partial data would be cached as fresh for 30 days; keep the old rows instead.
+            deferred = len(to_fetch) - i
+            tqdm.write(
+                f"  ! seasonality: eBird hourly quota exhausted — "
+                f"deferring {deferred} region(s) to a later run"
+            )
+            break
 
         conn.execute("DELETE FROM species_seasonality WHERE region = ?", (region,))
         conn.executemany(
@@ -122,6 +154,7 @@ def compute_seasonality(
     return {
         "regions_fetched": fetched,
         "regions_cached": cached,
+        "regions_deferred": deferred,
         "api_calls": api_calls,
         "sample_dates_per_region": len(sample_dates),
         "skipped_dates": skipped_dates,

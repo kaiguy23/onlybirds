@@ -20,6 +20,10 @@ fetch:
 latest lat="" lon="" radius="50": fetch
     uv run onlybirds run --csv life-lists/ {{ if lat != "" { "--lat " + lat } else { "" } }} {{ if lon != "" { "--lon " + lon } else { "" } }} --radius {{radius}}
 
+# Unattended run against the most recent CSV in life-lists/: waits out eBird's hourly quota instead of skipping work.
+overnight lat lon radius="50":
+    uv run onlybirds run --csv life-lists/ --lat {{lat}} --lon {{lon}} --radius {{radius}} --wait-for-quota
+
 # Launch the Streamlit + folium dashboard.
 serve port="8501":
     uv run onlybirds serve --port {{port}}

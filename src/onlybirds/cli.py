@@ -30,12 +30,15 @@ def run(
     ),
     db_path: Path = typer.Option(db.DEFAULT_DB_PATH, "--db", help="SQLite path."),
     force_refresh: bool = typer.Option(False, help="Bypass hotspot/enrichment caches."),
+    wait_for_quota: bool = typer.Option(
+        False, help="When eBird's hourly quota runs out, wait for it to recover instead of skipping work."
+    ),
 ) -> None:
     """Run the full pipeline end-to-end."""
     if csv.is_dir():
         csv = pick_latest_csv(csv)
         typer.echo(f"  using latest CSV: {csv}")
-    with db.session(db_path) as conn, EBirdClient() as client:
+    with db.session(db_path) as conn, EBirdClient(wait_for_quota=wait_for_quota) as client:
         typer.echo(f"[1/9] ingesting {csv}…")
         s1 = ingest.ingest_csv(conn, client, csv)
         typer.echo(f"      {s1}")
