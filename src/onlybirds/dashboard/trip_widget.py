@@ -20,6 +20,7 @@ from collections.abc import Callable
 import streamlit as st
 
 from onlybirds import trip
+from onlybirds.dashboard import place as place_search
 
 MAX_RADIUS_KM = 50
 
@@ -47,12 +48,6 @@ def _viewer_allowed() -> bool:
     return isinstance(email, str) and email.lower() in admins
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _geocode(query: str) -> trip.Place:
-    # Cached so re-runs of the script don't re-hit Nominatim (1 req/s policy).
-    return trip.geocode(query)
-
-
 @st.cache_data(ttl=30, show_spinner=False)
 def _recent_runs(token: str) -> list[trip.TripRun]:
     return trip.recent_runs(token)
@@ -69,7 +64,7 @@ def _resolve_point(place: str, lat: str, lon: str) -> trip.Place | None:
     try:
         if lat.strip() and lon.strip():
             return trip.Place(name=place.strip() or f"{lat}, {lon}", lat=float(lat), lon=float(lon))
-        return _geocode(place)
+        return place_search.geocode(place)
     except ValueError:
         st.error("Lat and lon must be numbers.")
     except trip.TripError as e:
@@ -132,7 +127,7 @@ def _trip_panel(token: str) -> None:
         if point is not None:
             # The map centers on ?at= and outlines the radius; it lives outside
             # this fragment, so rerun the whole app to move it.
-            st.query_params["at"] = f"{point.lat:.4f},{point.lon:.4f},{radius}"
+            place_search.set_focus(point.lat, point.lon, radius, place.strip() or point.name)
             started = not submitted or _start(
                 lambda: trip.dispatch(
                     token,

@@ -4,7 +4,6 @@ import calendar
 import dataclasses
 import datetime as dt
 import json
-from collections import Counter
 from enum import Enum
 
 import pandas as pd
@@ -25,13 +24,7 @@ class RarityFilter(str, Enum):
     COMMON_ONLY = "Common only"
 
 from onlybirds.dashboard.data import DashboardData
-from onlybirds.dashboard.regions import (
-    _REGION_NONE_SENTINEL,
-    _parse_active_regions,
-    _region_chips_panel,
-    _region_label,
-    _region_mask,
-)
+from onlybirds.dashboard.place import current_focus, within_radius
 from onlybirds.dashboard.urls import _hotspot_url
 from onlybirds.dashboard.utils import (
     _clean_str,
@@ -218,16 +211,11 @@ def _filter_target_rows(
     *,
     key_prefix: str,
     has_last_seen: bool,
-    region_options: list[str] | None = None,
 ) -> pd.DataFrame:
     """Render the filter/sort bar and return the filtered, sorted DataFrame.
 
     Expected columns on `df`: species_code, common_name, sci_name, is_rare,
     plus optionally `_last_seen` (ISO string) when has_last_seen=True.
-
-    When `region_options` is non-empty, also render a region multi-select
-    bound to the shared `?region=` URL param so it stays in sync with the
-    chip strip; the filtering itself happens upstream off the URL.
     """
     # Month-in-season filter: each option means "show species typically present
     # this month". The default ("Any month") doesn't filter by seasonality.
@@ -241,11 +229,7 @@ def _filter_target_rows(
     if "hotspot_count" in df.columns:
         sort_choices += [SortMode.MOST_HOTSPOTS]
 
-    show_region = bool(region_options)
-    if show_region:
-        col_widths = [3, 3, 2, 2, 2, 2] if has_last_seen else [3, 3, 2, 2, 2]
-    else:
-        col_widths = [3, 2, 2, 2, 2] if has_last_seen else [3, 2, 2, 2]
+    col_widths = [3, 2, 2, 2, 2] if has_last_seen else [3, 2, 2, 2]
     cols = st.columns(col_widths)
     q_key = f"{key_prefix}_q"
     # Search input + a small × clear button. Streamlit's text_input is
@@ -272,38 +256,6 @@ def _filter_target_rows(
                 on_click=lambda k=q_key: st.session_state.update({k: ""}),
             )
     next_col = 1
-    if show_region:
-        # Sync widget state from the URL (the chip strip's source of truth)
-        # before instantiating the multiselect, so chip clicks update the
-        # widget on the next rerun.
-        region_key = f"{key_prefix}_regions"
-        url_regions = _parse_active_regions(st.query_params.get("region"))
-        valid = [r for r in sorted(url_regions) if r in region_options]
-        if region_key not in st.session_state or set(
-            st.session_state[region_key]
-        ) != set(valid):
-            st.session_state[region_key] = valid
-
-        def _on_region_change(k: str = region_key) -> None:
-            sel = list(st.session_state.get(k, []))
-            if sel:
-                st.query_params["region"] = ",".join(sorted(sel))
-            elif "region" in st.query_params:
-                del st.query_params["region"]
-
-        with cols[next_col]:
-            st.multiselect(
-                "Regions",
-                options=region_options,
-                key=region_key,
-                on_change=_on_region_change,
-                format_func=lambda r: (
-                    "Other" if r == _REGION_NONE_SENTINEL else _region_label(r)
-                ),
-                placeholder="All regions",
-                label_visibility="collapsed",
-            )
-        next_col += 1
     with cols[next_col]:
         rarity = st.selectbox(
             "Rarity",
@@ -421,19 +373,17 @@ def render_targets(data: DashboardData, db_path: str | None = None) -> None:
         st.warning("No target birds yet. Run the pipeline.")
         return
 
-    # Region filter: shares `?region=` with the map view, so toggles persist
-    # across tabs. Counts on chips reflect hotspots in scope, not species.
-    active_regions = _parse_active_regions(st.query_params.get("region"))
-    _region_chips_panel(hotspots, hotspots.iloc[0:0], active_regions)
-
+    # Place filter: shares `?at=` with the map view (set by the place search
+    # above the tabs), so species are the ones seen near the picked place.
+    focus = current_focus()
     ht = data.hotspot_targets
-    if active_regions:
-        kept_hids = set(hotspots[_region_mask(hotspots, active_regions)]["hotspot_id"])
+    if focus:
+        kept_hids = set(hotspots[within_radius(hotspots, focus)]["hotspot_id"])
         ht = ht[ht["hotspot_id"].isin(kept_hids)]
-        codes_in_region = set(ht["species_code"]) if not ht.empty else set()
-        targets = targets[targets["species_code"].isin(codes_in_region)]
+        codes_nearby = set(ht["species_code"]) if not ht.empty else set()
+        targets = targets[targets["species_code"].isin(codes_nearby)]
         if targets.empty:
-            st.info("No target species in the selected regions.")
+            st.info("No target species seen around here yet.")
             return
 
     # Enrich each target with the most recent observation date across all
@@ -445,32 +395,16 @@ def render_targets(data: DashboardData, db_path: str | None = None) -> None:
     else:
         enriched["_last_seen"] = ""
 
-    # Region multiselect options: every distinct region across all hotspots
-    # (not the post-filter set), ordered by descending hotspot count so the
-    # most populated regions surface first. Same scope as the chip strip.
-    region_counts: Counter[str] = Counter()
-    if "region" in hotspots.columns:
-        region_counts.update(
-            r if isinstance(r, str) and r else _REGION_NONE_SENTINEL
-            for r in hotspots["region"]
-        )
-    region_options = (
-        sorted(region_counts.keys(), key=lambda k: (-region_counts[k], k))
-        if len(region_counts) > 1
-        else []
-    )
-
     filtered = _filter_target_rows(
         enriched,
         seasonality,
         key_prefix="targets",
         has_last_seen=True,
-        region_options=region_options,
     )
     # Semantic search is only meaningful when the species pool has been narrowed
     # — on the unfiltered global target list, "small gray bird" matches half the
-    # corpus and the LLM narration loses value. Gate on an active region.
-    if active_regions and db_path is not None:
+    # corpus and the LLM narration loses value. Gate on a picked place.
+    if focus and db_path is not None:
         from onlybirds.dashboard.semantic_widget import render_semantic_search
         filtered = render_semantic_search(
             filtered, key_prefix="targets", db_path=db_path,

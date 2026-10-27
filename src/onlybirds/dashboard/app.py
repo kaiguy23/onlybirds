@@ -12,6 +12,7 @@ import streamlit as st
 from onlybirds import db
 from onlybirds.dashboard.compare import render_compare
 from onlybirds.dashboard.data import load_data
+from onlybirds.dashboard.place import render_place_search
 from onlybirds.dashboard.semantic_widget import render_sidebar_input
 from onlybirds.dashboard.styles import _PAGE_CSS
 from onlybirds.dashboard.targets_view import render_targets
@@ -63,6 +64,8 @@ def main() -> None:
         render_hotspot_detail(hotspot_id, data, args.db)
         return
 
+    # Narrows both tabs to the hotspots around a city or point.
+    render_place_search()
     tab_map, tab_list = st.tabs(["Map", "Target list"])
     with tab_map:
         render_map(data, args.db)

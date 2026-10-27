@@ -241,8 +241,8 @@ def _send_example(prompt: str) -> None:
 def _chat_is_active() -> bool:
     """The chat only re-ranks meaningful when the species corpus is narrowed.
 
-    Top-level Map / Target list with no region selected sees the full DB, where
-    'small gray bird' matches half the corpus. Region-filtered list views and
+    Top-level Map / Target list with no place picked sees the full DB, where
+    'small gray bird' matches half the corpus. Place-filtered list views and
     the detail/compare views are all narrowed by construction, so the chat is
     meaningful there. Drive the gate off URL params so we don't have to thread
     a flag through every view.
@@ -252,7 +252,7 @@ def _chat_is_active() -> bool:
         return True
     if qp.get("hotspot") or qp.get("consolidated"):
         return True
-    return bool((qp.get("region") or "").strip())
+    return bool((qp.get("at") or "").strip())
 
 
 def render_sidebar_input() -> None:
@@ -279,7 +279,7 @@ def render_sidebar_input() -> None:
             # suppressed because typing without a narrowed corpus is a
             # confusing dead end.
             st.caption(
-                "Pick a region (or open a hotspot / consolidated area) to "
+                "Search a place (or open a hotspot / consolidated area) to "
                 "narrow the species pool, then describe what you saw here."
             )
             return

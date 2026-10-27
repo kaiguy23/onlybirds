@@ -36,13 +36,7 @@ from onlybirds.dashboard.markers import (
     _tooltip_html,
 )
 from onlybirds.dashboard.mini_map import _detail_location_map
-from onlybirds.dashboard.regions import (
-    _REGION_PREVIEW_HTML_TEMPLATE,
-    _parse_active_regions,
-    _region_bboxes,
-    _region_chips_panel,
-    _region_mask,
-)
+from onlybirds.dashboard.place import current_focus, within_radius
 from onlybirds.dashboard.semantic_widget import (
     apply_semantic_search,
     current_description,
@@ -149,20 +143,6 @@ def _build_places_by_code(
     return by_code
 
 
-def _parse_focus(raw: str | None) -> tuple[float, float, float] | None:
-    """`?at=lat,lon[,radius_km]` → (lat, lon, radius_km), or None if absent/garbled."""
-    if not raw:
-        return None
-    try:
-        parts = [float(p) for p in raw.split(",")]
-    except ValueError:
-        return None
-    if len(parts) < 2 or not (-90 <= parts[0] <= 90 and -180 <= parts[1] <= 180):
-        return None
-    radius = parts[2] if len(parts) > 2 and parts[2] > 0 else 25.0
-    return parts[0], parts[1], radius
-
-
 def render_map(data: DashboardData, db_path: str) -> None:
     hotspots = data.hotspots
     hotspot_targets = data.hotspot_targets
@@ -180,15 +160,14 @@ def render_map(data: DashboardData, db_path: str) -> None:
     )
     singletons = hotspots[~hotspots["hotspot_id"].isin(member_ids)]
 
-    # Region filter: a chip strip above the top-hotspots strip. Active regions
-    # come from `?region=A,B,C` (multi-select) and narrow the map, the
-    # top-hotspots panel, and the bounds.
+    # Place filter: `?at=lat,lon,radius` (from the place search above the tabs
+    # or the trip form's "Show on map") narrows the map, the top-hotspots
+    # panel, and the bounds to hotspots within the radius.
     _render_compare_tray(data)
-    active_regions = _parse_active_regions(st.query_params.get("region"))
-    _region_chips_panel(singletons, consolidated, active_regions)
-    if active_regions:
-        singletons = singletons[_region_mask(singletons, active_regions)]
-        consolidated = consolidated[_region_mask(consolidated, active_regions)]
+    focus = current_focus()
+    if focus:
+        singletons = singletons[within_radius(singletons, focus)]
+        consolidated = consolidated[within_radius(consolidated, focus)]
         # Keep member/target frames in sync so popups for the surviving
         # consolidations still resolve correctly.
         kept_cids = set(consolidated["consolidated_id"])
@@ -199,16 +178,18 @@ def render_map(data: DashboardData, db_path: str) -> None:
             consolidated_targets["consolidated_id"].isin(kept_cids)
         ]
         if singletons.empty and consolidated.empty:
-            st.info("No hotspots in the selected regions.")
-            return
+            st.info(
+                "No hotspots loaded around here yet. Start a refresh from "
+                "✈️ Plan a trip in the sidebar to pull them."
+            )
 
-    # "Describe the bird" chat — only re-ranks when a region is selected
+    # "Describe the bird" chat — only re-ranks when a place is picked
     # (otherwise the corpus is the entire DB and the answer isn't view-
     # specific). The matches snapshot stored on each assistant bubble carries
     # the in-view hotspot + consolidated-area links, so the user sees
     # clickable "where to go" results inside the chat itself rather than in a
     # separate main-column panel.
-    if active_regions:
+    if focus:
         kept_hids = set(singletons["hotspot_id"])
         ht_filtered = hotspot_targets[hotspot_targets["hotspot_id"].isin(kept_hids)]
         species_in_view = pd.concat(
@@ -234,16 +215,13 @@ def render_map(data: DashboardData, db_path: str) -> None:
 
     _top_hotspots_panel(singletons, consolidated)
 
-    # Compute center & bounds from the *filtered* set so the map zooms to the
-    # selected regions.
+    # Frame the picked place's radius, or else every hotspot in the DB (the
+    # midpoint of several cities can be an empty state in between).
     lats = list(singletons["lat"]) + list(consolidated["lat"])
     lons = list(singletons["lon"]) + list(consolidated["lon"])
-    center = [sum(lats) / len(lats), sum(lons) / len(lons)]
-    m = positron_map(location=center, zoom_start=10)
-    focus = _parse_focus(st.query_params.get("at"))
     if focus:
-        # A place picked in the "Plan a trip" form: frame its search radius.
         f_lat, f_lon, f_radius_km = focus
+        m = positron_map(location=[f_lat, f_lon], zoom_start=10)
         folium.Circle(
             location=[f_lat, f_lon],
             radius=f_radius_km * 1000,
@@ -260,11 +238,10 @@ def render_map(data: DashboardData, db_path: str) -> None:
         deg_lat = f_radius_km / 111.0
         deg_lon = deg_lat / max(math.cos(math.radians(f_lat)), 0.01)
         m.fit_bounds([[f_lat - deg_lat, f_lon - deg_lon], [f_lat + deg_lat, f_lon + deg_lon]])
-    elif active_regions and len(lats) > 1:
-        m.fit_bounds(
-            [[min(lats), min(lons)], [max(lats), max(lons)]],
-            padding=(40, 40),
-        )
+    else:
+        m = positron_map(location=[sum(lats) / len(lats), sum(lons) / len(lons)], zoom_start=10)
+        if len(lats) > 1:
+            m.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], padding=(40, 40))
     popups = LazyPopups()
     popups.add_to(m)  # before the markers: it hooks their creation
     cluster = MarkerCluster(icon_create_function=_CLUSTER_ICON_FN).add_to(m)
@@ -348,10 +325,6 @@ def render_map(data: DashboardData, db_path: str) -> None:
     # hence the `ty: ignore`s below.
     root = m.get_root()
     root.html.add_child(folium.Element(_LEGEND_HTML))  # ty: ignore[unresolved-attribute]
-    # Region-preview rectangle on chip hover. Bboxes come from the *unfiltered*
-    # hotspot set so chips for regions outside the current filter still preview
-    # correctly.
-    bboxes = _region_bboxes(data.hotspots)
     # Tooltip wrapping, plus the phone layout for popups and the legend.
     root.header.add_child(folium.Element(_MAP_CSS))  # ty: ignore[unresolved-attribute]
 
@@ -365,16 +338,6 @@ def render_map(data: DashboardData, db_path: str) -> None:
         returned_objects=[],
         key="hotspot_map",
     )
-
-    # Region-preview hover handler. Emitted as a separate `components.html`
-    # iframe (which honors srcdoc and runs scripts) that reaches into the
-    # folium iframe's same-origin window to draw/remove the bbox rectangle
-    # on chip mouseenter/leave. Height=0 keeps it visually invisible.
-    if bboxes:
-        preview_html = _REGION_PREVIEW_HTML_TEMPLATE.replace(
-            "__BBOXES__", json.dumps(bboxes)
-        )
-        st.iframe(preview_html, height=1)
 
 
 def render_consolidated_detail(
