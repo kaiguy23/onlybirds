@@ -12,8 +12,12 @@ install:
 run csv lat="" lon="" radius="25":
     uv run onlybirds run --csv {{csv}} {{ if lat != "" { "--lat " + lat } else { "" } }} {{ if lon != "" { "--lon " + lon } else { "" } }} --radius {{radius}}
 
-# Run the pipeline against the most recent CSV in life-lists/ (parsed from MM-DD-YYYY.csv). lat/lon fall back to ONLYBIRDS_LAT/LON in .env.
-latest lat="" lon="" radius="50":
+# Download today's life list from eBird into life-lists/MM-DD-YYYY.csv (needs EBIRD_USERNAME/EBIRD_PASSWORD or EBIRD_SESSIONID in .env).
+fetch:
+    uv run onlybirds fetch-lifelist
+
+# Fetch the life list from eBird, then run the pipeline against the most recent CSV in life-lists/. lat/lon fall back to ONLYBIRDS_LAT/LON in .env.
+latest lat="" lon="" radius="50": fetch
     uv run onlybirds run --csv life-lists/ {{ if lat != "" { "--lat " + lat } else { "" } }} {{ if lon != "" { "--lon " + lon } else { "" } }} --radius {{radius}}
 
 # Launch the Streamlit + folium dashboard.

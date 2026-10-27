@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 from dotenv import load_dotenv
 
-from . import consolidate, db, ebird_id, embeddings, enrich, hotspots, ingest, rare, seasonality, targets
+from . import consolidate, db, ebird_id, embeddings, enrich, hotspots, ingest, lifelist, rare, seasonality, targets
 from .ebird import EBirdClient
 from .ingest import pick_latest_csv
 
@@ -106,6 +106,19 @@ def consolidate_cmd(
     with db.session(db_path) as conn:
         s = consolidate.consolidate_hotspots(conn, radius_km=radius_km)
         typer.echo(f"  {s}")
+
+
+@app.command(name="fetch-lifelist")
+def fetch_lifelist_cmd(
+    out_dir: Path = typer.Option(Path("life-lists"), "--out-dir", help="Directory to write MM-DD-YYYY.csv into."),
+) -> None:
+    """Download your eBird life list CSV (needs EBIRD_SESSIONID)."""
+    try:
+        path = lifelist.fetch_life_list(out_dir)
+    except lifelist.LifeListError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    typer.echo(f"  saved {path}")
 
 
 @app.command()
