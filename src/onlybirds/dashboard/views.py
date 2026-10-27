@@ -2,6 +2,7 @@
 
 import datetime as dt
 import json
+import math
 
 import folium
 import pandas as pd
@@ -146,6 +147,20 @@ def _build_places_by_code(
     return by_code
 
 
+def _parse_focus(raw: str | None) -> tuple[float, float, float] | None:
+    """`?at=lat,lon[,radius_km]` → (lat, lon, radius_km), or None if absent/garbled."""
+    if not raw:
+        return None
+    try:
+        parts = [float(p) for p in raw.split(",")]
+    except ValueError:
+        return None
+    if len(parts) < 2 or not (-90 <= parts[0] <= 90 and -180 <= parts[1] <= 180):
+        return None
+    radius = parts[2] if len(parts) > 2 and parts[2] > 0 else 25.0
+    return parts[0], parts[1], radius
+
+
 def render_map(data: DashboardData, db_path: str) -> None:
     hotspots = data.hotspots
     hotspot_targets = data.hotspot_targets
@@ -223,7 +238,27 @@ def render_map(data: DashboardData, db_path: str) -> None:
     lons = list(singletons["lon"]) + list(consolidated["lon"])
     center = [sum(lats) / len(lats), sum(lons) / len(lons)]
     m = positron_map(location=center, zoom_start=10)
-    if active_regions and len(lats) > 1:
+    focus = _parse_focus(st.query_params.get("at"))
+    if focus:
+        # A place picked in the "Plan a trip" form: frame its search radius.
+        f_lat, f_lon, f_radius_km = focus
+        folium.Circle(
+            location=[f_lat, f_lon],
+            radius=f_radius_km * 1000,
+            color="#1f4f99",
+            weight=2,
+            fill=True,
+            fill_opacity=0.04,
+            dash_array="6 6",
+        ).add_to(m)
+        folium.CircleMarker(
+            location=[f_lat, f_lon], radius=6, color="white", weight=2,
+            fill=True, fill_color="#1f4f99", fill_opacity=1,
+        ).add_to(m)
+        deg_lat = f_radius_km / 111.0
+        deg_lon = deg_lat / max(math.cos(math.radians(f_lat)), 0.01)
+        m.fit_bounds([[f_lat - deg_lat, f_lon - deg_lon], [f_lat + deg_lat, f_lon + deg_lon]])
+    elif active_regions and len(lats) > 1:
         m.fit_bounds(
             [[min(lats), min(lons)], [max(lats), max(lons)]],
             padding=(40, 40),
