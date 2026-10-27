@@ -186,7 +186,7 @@ def _popup_html(
     # Cap the species list height so popups for big hotspots don't grow taller
     # than the map. Beyond ~14 species the inner <ul> scrolls.
     body = (
-        "<div style='max-height:340px;overflow-y:auto;margin-top:6px;"
+        "<div class='onlybirds-popup-list' style='max-height:340px;overflow-y:auto;margin-top:6px;"
         # Reserve a bit of right padding so the scrollbar doesn't sit on top of
         # the species names.
         "padding-right:4px;'>"
@@ -275,7 +275,7 @@ def _consolidated_popup_html(
                 f"<li style='margin:1px 0;'>{link}{flag}{when_html}</li>"
             )
     targets_html = (
-        "<div style='max-height:280px;overflow-y:auto;margin-top:8px;padding-right:4px;'>"
+        "<div class='onlybirds-popup-list' style='max-height:280px;overflow-y:auto;margin-top:8px;padding-right:4px;'>"
         "<div style='font-size:11px;color:#666;text-transform:uppercase;"
         "letter-spacing:.05em;margin-bottom:2px;'>Unique species</div>"
         "<ul style='margin:0;padding-left:18px;font-size:13px;'>"
@@ -347,7 +347,10 @@ _LEGEND_HTML = """
     border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 12px; line-height: 1.7; color: #222;">
-  <div style="font-weight:700;margin-bottom:4px;letter-spacing:.02em;">Where to go</div>
+  <input type="checkbox" id="onlybirds-legend-toggle" style="display:none;">
+  <label for="onlybirds-legend-toggle" class="onlybirds-legend-title"
+         style="display:block;font-weight:700;margin-bottom:4px;letter-spacing:.02em;">Where to go</label>
+  <div class="onlybirds-legend-body">
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="width:14px;height:14px;border-radius:50%;background:#e74c3c;
                  box-shadow:0 0 0 3px rgba(231,76,60,0.32);display:inline-block;"></span>
@@ -370,5 +373,39 @@ _LEGEND_HTML = """
     no targets
   </div>
   <div style="margin-top:6px;color:#777;font-size:11px;">circle size ∝ target count</div>
+  </div>
 </div>
+"""
+
+# CSS injected into the folium iframe's <head>. Inline <script> tags don't run
+# inside st_folium, so the phone behavior is CSS-only.
+_MAP_CSS = """
+<style>
+/* Leaflet's default `.leaflet-tooltip` rule sets `white-space: nowrap`, so long
+   hotspot names overflow the map. Let them wrap at word boundaries up to a
+   sensible width. Avoid `word-break` / `overflow-wrap: anywhere` here — they
+   let the tooltip's min-content collapse to a one-character column. */
+.leaflet-tooltip {white-space: normal !important; max-width: 260px !important; width: max-content !important;}
+
+/* Touch screens: a tap opens the popup, and the hover tooltip lingers on top
+   of it saying the same thing. */
+@media (pointer: coarse) {
+  .leaflet-tooltip {display: none !important;}
+}
+
+/* Phones: the map is ~60% of the screen, so keep popups to a scrollable
+   strip that fits, and fold the legend into a "Where to go" pill that opens
+   on tap. (vh here is the map iframe's height.) */
+@media (max-width: 640px) {
+  .leaflet-popup-content {margin: 10px 12px !important; font-size: 13px;}
+  .leaflet-popup-content > div {min-width: 0 !important; max-width: 72vw !important;}
+  .onlybirds-popup-list {max-height: 34vh !important;}
+  #onlybirds-legend {bottom: 12px !important; left: 10px !important; padding: 4px 10px !important;}
+  .onlybirds-legend-title {margin: 0 !important; cursor: pointer;}
+  .onlybirds-legend-title::after {content: " ▸"; color: #888;}
+  .onlybirds-legend-body {display: none;}
+  #onlybirds-legend-toggle:checked ~ .onlybirds-legend-body {display: block;}
+  #onlybirds-legend-toggle:checked ~ .onlybirds-legend-title::after {content: " ▾";}
+}
+</style>
 """

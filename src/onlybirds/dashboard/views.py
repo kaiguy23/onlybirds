@@ -26,6 +26,7 @@ from onlybirds.dashboard.data import (
 from onlybirds.dashboard.markers import (
     _CLUSTER_ICON_FN,
     _LEGEND_HTML,
+    _MAP_CSS,
     _consolidated_marker_html,
     _consolidated_popup_html,
     _consolidated_tooltip_html,
@@ -278,6 +279,7 @@ def render_map(data: DashboardData, db_path: str) -> None:
         popup = folium.Popup(
             _popup_html(h["hotspot_id"], name, rows),
             max_width=320,
+            keep_in_view=True,
         )
         folium.Marker(
             location=[h["lat"], h["lon"]],
@@ -327,6 +329,7 @@ def render_map(data: DashboardData, db_path: str) -> None:
             popup = folium.Popup(
                 _consolidated_popup_html(cid, name, members, ctargets),
                 max_width=340,
+                keep_in_view=True,
             )
             folium.Marker(
                 location=[c["lat"], c["lon"]],
@@ -352,22 +355,8 @@ def render_map(data: DashboardData, db_path: str) -> None:
     # hotspot set so chips for regions outside the current filter still preview
     # correctly.
     bboxes = _region_bboxes(data.hotspots)
-    # Leaflet's default `.leaflet-tooltip` rule sets `white-space: nowrap`, so
-    # long hotspot names overflow the map. Override inside the iframe so they
-    # wrap at word boundaries up to a sensible max width. Avoid `word-break`
-    # / `overflow-wrap: anywhere` here — they let the tooltip's min-content
-    # collapse to a single character, which produces a 1-char-wide column.
-    root.header.add_child(  # ty: ignore[unresolved-attribute]
-        folium.Element(
-            "<style>"
-            ".leaflet-tooltip{"
-            "white-space:normal !important;"
-            "max-width:260px !important;"
-            "width:max-content !important;"
-            "}"
-            "</style>"
-        )
-    )
+    # Tooltip wrapping, plus the phone layout for popups and the legend.
+    root.header.add_child(folium.Element(_MAP_CSS))  # ty: ignore[unresolved-attribute]
 
     # Click on a marker opens a popup whose title links to the hotspot detail.
     # We don't need st_folium's return value since navigation happens via the
