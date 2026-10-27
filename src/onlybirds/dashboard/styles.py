@@ -60,6 +60,24 @@ iframe[title^="streamlit_folium"] {min-height: 78vh;}
     visibility: hidden !important;
 }
 
+/* Phones. The region chips (often 30+) wrapped into a full screen of pills
+   above the map; make them one swipeable row. Shrink the map to ~60% of the
+   screen so a one-finger swipe has page above and below it to scroll — a
+   near-full-screen map traps the page. Drop the DB path from the header. */
+@media (max-width: 640px) {
+    .block-container {padding-left: 0.75rem !important; padding-right: 0.75rem !important;}
+    .onlybirds-header .db {display: none;}
+    .onlybirds-region-strip {
+        display: flex; flex-wrap: nowrap; align-items: center;
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; padding-bottom: 2px;
+    }
+    .onlybirds-region-strip::-webkit-scrollbar {display: none;}
+    .onlybirds-region-strip > * {flex: 0 0 auto; white-space: nowrap; margin-bottom: 0 !important;}
+    .onlybirds-region-chip {padding: 7px 12px !important; font-size: 13px !important;}
+    iframe[title^="streamlit_folium"] {min-height: 0; height: 62vh !important;}
+}
+
 /* On mobile, Streamlit columns stay side-by-side and squeeze the search
    input down to ~20% of the viewport. Stack the filter row vertically.
    The inner search + × clear block keeps its own `flex-wrap: nowrap` and

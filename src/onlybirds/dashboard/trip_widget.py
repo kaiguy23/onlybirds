@@ -3,10 +3,11 @@ or pull your latest eBird life list.
 
 Shown only when GITHUB_TRIP_TOKEN is set (a fine-grained token with "Actions:
 read and write" on this repo) and the viewer is allowed by TRIP_ADMINS — a
-comma-separated list of emails matched against `st.user.email`, which Streamlit
-Community Cloud fills in for logged-in viewers. TRIP_ADMINS="*" allows anyone
-who can open the app (handy locally). Both come from Streamlit secrets, which
-Cloud exposes as env vars.
+comma-separated list of emails matched against `st.user.email`, or "*" for
+anyone who can open the app. Community Cloud doesn't fill in st.user for
+invited viewers (only the app's own st.login does), so "*" with invite-only
+sharing is the setup that works there. Both are read from st.secrets first, so a secrets edit
+applies on the next rerun, then from env vars (.env locally).
 
 Each run costs up to a couple of hours of eBird quota, so the form never shows
 to an unlisted viewer, even on a private app.
@@ -21,12 +22,21 @@ from onlybirds import trip
 MAX_RADIUS_KM = 50
 
 
+def _setting(name: str) -> str:
+    # Cloud also exports secrets as env vars, but only when the app starts.
+    try:
+        value = st.secrets.get(name)
+    except FileNotFoundError:  # no secrets.toml locally
+        value = None
+    return str(value if value is not None else os.environ.get(name) or "").strip()
+
+
 def _token() -> str | None:
-    return (os.environ.get("GITHUB_TRIP_TOKEN") or "").strip() or None
+    return _setting("GITHUB_TRIP_TOKEN") or None
 
 
 def _viewer_allowed() -> bool:
-    admins = {a.strip().lower() for a in (os.environ.get("TRIP_ADMINS") or "").split(",") if a.strip()}
+    admins = {a.strip().lower() for a in _setting("TRIP_ADMINS").split(",") if a.strip()}
     if not admins:
         return False
     if "*" in admins:

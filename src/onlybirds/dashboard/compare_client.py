@@ -80,6 +80,50 @@ function toggleId(id) {
 }
 function clearAll() { return writeIds([]); }
 
+// Open an app page (`query` like "?hotspot=L123"). Phones navigate the app in
+// place — a new Safari tab per tap is the clunkiest part on iOS. The sandbox
+// blocks navigating the parent directly, but clicking an anchor that lives in
+// the parent's (same-origin) document is the parent's own navigation. Desktop
+// keeps opening a new tab so the map stays put.
+function openApp(query) {
+  const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  if (touch) {
+    try {
+      const doc = window.parent.document;
+      const a = doc.createElement('a');
+      a.href = window.parent.location.pathname + query;
+      a.target = '_self';
+      doc.body.appendChild(a);
+      a.click();
+      return;
+    } catch (e) {}
+  }
+  window.open((window.top.location.pathname || '/') + query, '_blank');
+}
+
+// Size this iframe to its content. st.iframe ignores the components
+// `setFrameHeight` message, so also set the (same-origin) frame element's
+// height directly — otherwise wrapped rows get clipped and an empty tray
+// still takes its fixed height.
+function syncHeight() {
+  const h = document.body.getBoundingClientRect().height;
+  window.parent.postMessage({type:'streamlit:setFrameHeight', height: h}, '*');
+  try {
+    const f = window.frameElement;
+    if (!f) return;
+    f.style.height = h + 'px';
+    // Streamlit's element container keeps the original fixed height too;
+    // hide it outright when there's nothing to show (empty tray).
+    const box = f.closest('[data-testid="stElementContainer"]');
+    if (box) {
+      box.style.setProperty('height', h + 'px', 'important');
+      box.style.setProperty('flex', '0 0 ' + h + 'px', 'important');
+      box.style.setProperty('min-height', '0', 'important');
+      box.style.display = h ? '' : 'none';
+    }
+  } catch (e) {}
+}
+
 // Subscribe to changes from any frame (storage event for cross-frame writes,
 // custom event for same-window writes from sibling components).
 function onChange(handler) {
@@ -152,12 +196,7 @@ function render() {{
     btn.className = 'btn-cmp';
     btn.textContent = 'Compare ' + ids.length + ' →';
     btn.onclick = () => {{
-      // The component iframe's sandbox blocks both `_top` and `_self`
-      // navigation of the top frame (no `allow-top-navigation`). Opening
-      // in a new tab is allowed via `allow-popups` and avoids any flash
-      // on the current tab.
-      const u = (window.top.location.pathname || '/') + '?view=compare&compare=' + encodeURIComponent(ids.join(','));
-      window.open(u, '_blank');
+      openApp('?view=compare&compare=' + encodeURIComponent(ids.join(',')));
     }};
     ctaEl.appendChild(btn);
   }} else {{
@@ -172,11 +211,6 @@ document.getElementById('clear').onclick = () => {{ clearAll(); render(); }};
 onChange(() => render());
 render();
 
-// Auto-resize the iframe to the tray's content height.
-function syncHeight() {{
-  const h = document.documentElement.scrollHeight;
-  window.parent.postMessage({{type:'streamlit:setFrameHeight', height: h}}, '*');
-}}
 new ResizeObserver(syncHeight).observe(document.body);
 syncHeight();
 </script></body></html>
@@ -218,10 +252,6 @@ function render() {{
 btn.onclick = () => {{ toggleId(ITEM.id); render(); }};
 onChange(() => render());
 render();
-function syncHeight() {{
-  const h = document.documentElement.scrollHeight;
-  window.parent.postMessage({{type:'streamlit:setFrameHeight', height: h}}, '*');
-}}
 new ResizeObserver(syncHeight).observe(document.body);
 syncHeight();
 </script></body></html>
@@ -252,6 +282,15 @@ _TOP_STRIP_HTML = """
 <html><head><meta charset="utf-8"><style>
   body {{ margin:0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: transparent; }}
   .strip {{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; }}
+  #chips {{ display:contents; }}
+  /* Phones: one swipeable row instead of a wrapped block that pushes the map down. */
+  @media (max-width: 640px) {{
+    .strip {{ flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; }}
+    .strip::-webkit-scrollbar {{ display:none; }}
+    .chip, .label {{ flex:0 0 auto; white-space:nowrap; }}
+    .chip {{ padding:6px 6px 6px 12px; font-size:13px; }}
+    .chip .toggle {{ padding:2px 8px; font-size:13px; }}
+  }}
   .label {{ color:#666; font-size:11px; font-weight:700; letter-spacing:.06em; margin-right:4px; text-transform:uppercase; }}
   .chip {{ color:white; padding:4px 6px 4px 10px; border-radius:14px; font-size:12px; font-weight:600; display:inline-flex; align-items:center; }}
   .chip a.body {{ color:white; text-decoration:none; cursor:pointer; }}
@@ -280,13 +319,11 @@ function render() {{
     body.className = 'body';
     body.href = row.url;
     // The strip lives in a sandboxed iframe; `_self` would navigate the
-    // iframe itself (chip vanishes). `_top` is blocked by the sandbox, so
-    // we intercept the click and use `window.open(url, '_blank')` which
-    // is allowed via `allow-popups`.
+    // iframe itself (chip vanishes), so openApp() handles the click.
     body.target = '_blank';
     body.onclick = (e) => {{
       e.preventDefault();
-      window.open(row.url, '_blank');
+      openApp(row.url);
     }};
     body.textContent = (row.rare ? ('🚨' + row.rare + ' · ') : '') + row.tot + '× ' + (row.cons ? '⊕ ' : '') + row.name;
     chip.appendChild(body);
@@ -311,10 +348,6 @@ function render() {{
 }}
 onChange(() => render());
 render();
-function syncHeight() {{
-  const h = document.documentElement.scrollHeight;
-  window.parent.postMessage({{type:'streamlit:setFrameHeight', height: h}}, '*');
-}}
 new ResizeObserver(syncHeight).observe(document.body);
 syncHeight();
 </script></body></html>
