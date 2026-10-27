@@ -1,0 +1,43 @@
+# Pull your latest eBird life list into the DB and update targets, then commit so Streamlit Cloud redeploys.
+# Takes a few minutes: it logs into ebird.org for the CSV export and makes no hotspot calls. Start it from the
+# dashboard's "Pull my life list" button, the GitHub app (Actions → lifelist → Run workflow), or `just sync`.
+#
+# Secrets: EBIRD_USERNAME and EBIRD_PASSWORD (or EBIRD_SESSIONID), and EBIRD_API_KEY (for the taxonomy).
+name: lifelist
+run-name: "life list sync"
+
+on:
+  workflow_dispatch: {}
+
+# Shares the DB with trip runs; a sync waits for a running trip rather than racing its commit.
+concurrency:
+  group: trip
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
+      EBIRD_USERNAME: ${{ secrets.EBIRD_USERNAME }}
+      EBIRD_PASSWORD: ${{ secrets.EBIRD_PASSWORD }}
+      EBIRD_SESSIONID: ${{ secrets.EBIRD_SESSIONID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+      - run: uv run onlybirds sync-lifelist
+
+      - name: Commit the DB
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898549+github-actions[bot]@users.noreply.github.com"
+          git add data/onlybirds.db life-lists/
+          if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+          git commit -m "data: life list sync"
+          git pull --rebase origin main
+          git push origin HEAD:main

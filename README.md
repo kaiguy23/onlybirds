@@ -91,6 +91,31 @@ Hotspot and consolidated-hotspot detail pages default to **targets only** (birds
 
 **Target-list tab.** Scrollable feed with photos, Wikipedia blurbs, in-season badges (✅ / ⚠️ off-season with a Jan–Dec strip), and a "rare alerts only" toggle.
 
+## Plan a trip (refresh without your laptop)
+
+`.github/workflows/trip.yml` runs the pipeline in GitHub Actions for a new place, waits out eBird's 500 calls/hour quota (a new city takes 1–2 hours), and commits `data/onlybirds.db`, so Streamlit Cloud redeploys with it. Start it any of three ways:
+
+- the dashboard's **✈️ Plan a trip** sidebar form (city name, or lat/lon),
+- the GitHub app: Actions → trip → Run workflow,
+- `just trip "Austin, TX"` (needs the `gh` CLI).
+
+**Pull your latest life list.** After a day out, `.github/workflows/lifelist.yml` logs into ebird.org with `EBIRD_USERNAME`/`EBIRD_PASSWORD`, downloads your life list, updates `observations` and targets (rare-alert flags are kept), and commits the DB. It takes a few minutes and makes no hotspot calls. Start it from the **Pull my latest life list** button in the same sidebar section, from Actions → lifelist, or with `just sync`. Locally, `onlybirds sync-lifelist` does the same thing.
+
+One-time setup:
+
+1. **Repo secrets** (Settings → Secrets and variables → Actions): `EBIRD_API_KEY`, `GEMINI_API_KEY`, `EBIRD_USERNAME`/`EBIRD_PASSWORD` (the life-list sync needs them; trips also use them to pull today's list first), and `ONLYBIRDS_CONTACT`.
+2. **For the dashboard form**, a [fine-grained token](https://github.com/settings/personal-access-tokens/new) for this repo only, with *Actions: Read and write*. Add to the Streamlit app's secrets:
+
+   ```toml
+   GITHUB_TRIP_TOKEN = "github_pat_…"
+   TRIP_ADMINS = "you@example.com"   # viewers who see the form; "*" = anyone who can open the app
+   ```
+
+   The form stays hidden unless both are set and the viewer's email (from Community Cloud's login) is listed.
+3. **Optional:** `GOOGLE_MAPS_API_KEY` (in both the Streamlit secrets and the repo secrets) looks places up with Google's Geocoding API instead of OpenStreetMap. It handles landmarks and loose spellings better. Restrict the key to the Geocoding API.
+
+Each run uses up to a couple of hours of your eBird quota, so keep the app's sharing set to invited viewers only.
+
 ## CSV format
 
 Standard eBird life-list export works out of the box (`Common Name`, `Scientific Name`, `Date`, `Location`). Custom CSVs are accepted as long as they have a species column (any of: `species`, `common_name`, `bird`) and a date column. Lat/lon and location are optional.
@@ -104,11 +129,12 @@ src/onlybirds/
   ebird.py          # eBird API 2.0 client
   taxonomy.py       # taxonomy cache + name → species_code resolver
   ingest.py         # CSV → observations
-  hotspots.py       # nearby hotspots + recent obs (TTL 6h)
+  hotspots.py       # nearby hotspots + recent obs (TTL 24h, quota-aware)
   seasonality.py    # sample historical obs per county (TTL 30d)
   targets.py        # set diff: hotspot species not in life list
   rare.py           # cross-check against /recent/notable
   enrich.py         # Wikipedia summary + image (TTL 30d) — targets ∪ hotspot species
+  trip.py           # geocode a city + start the trip refresh workflow
   dashboard/        # Streamlit + folium UI
     app.py          # entrypoint + routing
     views.py        # map + hotspot/consolidated detail pages
@@ -118,6 +144,7 @@ src/onlybirds/
     regions.py      # region filter chips
     mini_map.py     # compact map for detail pages
     basemap.py      # CARTO Positron tiles (CARTO_API_KEY)
+    trip_widget.py  # sidebar "Plan a trip" form (owner-only)
     data.py, urls.py, utils.py, styles.py
 life-lists/         # your CSVs go here
 data/               # SQLite db + caches (gitignored)
@@ -128,7 +155,7 @@ data/               # SQLite db + caches (gitignored)
 | Resource              | Where                 | TTL     |
 |-----------------------|-----------------------|---------|
 | eBird taxonomy        | `taxonomy`            | 90 days |
-| Hotspot obs           | `hotspot_obs`         | 6 hours |
+| Hotspot obs           | `hotspot_obs`         | 24 hours |
 | Seasonality samples   | `species_seasonality` | 30 days |
 | Wikipedia summary     | `species_info`        | 30 days |
 

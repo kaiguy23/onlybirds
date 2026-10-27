@@ -15,6 +15,7 @@ from onlybirds.dashboard.data import load_data
 from onlybirds.dashboard.semantic_widget import render_sidebar_input
 from onlybirds.dashboard.styles import _PAGE_CSS
 from onlybirds.dashboard.targets_view import render_targets
+from onlybirds.dashboard.trip_widget import render_trip_form
 from onlybirds.dashboard.views import (
     render_consolidated_detail,
     render_hotspot_detail,
@@ -45,6 +46,8 @@ def main() -> None:
     # every view, so the user can refine their query without losing place in a
     # detail page.
     render_sidebar_input()
+    # Owner-only: start a refresh for a new trip destination (GitHub Actions).
+    render_trip_form()
 
     # Routing: ?view=compare for the compare view, ?hotspot=<id> or
     # ?consolidated=<id> for detail views.

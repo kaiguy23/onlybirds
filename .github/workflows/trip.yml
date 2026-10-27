@@ -1,0 +1,91 @@
+# Refresh the data around a trip destination, then commit the DB so Streamlit Cloud redeploys with it.
+# Start it from the dashboard's "Plan a trip" form, the GitHub app (Actions → trip → Run workflow), or
+# `gh workflow run trip.yml -f city="Austin, TX"`. Give either lat+lon or a city.
+#
+# A new city costs ~400–600 eBird calls against a 500/hour quota, so expect 1–2 hours: the run waits
+# for the quota to recover instead of skipping work (--wait-for-quota).
+#
+# Secrets: EBIRD_API_KEY and GEMINI_API_KEY (required); EBIRD_USERNAME/EBIRD_PASSWORD (optional, to pull
+# today's life list first); ONLYBIRDS_CONTACT (optional, sent in the Wikipedia/Nominatim User-Agent);
+# GOOGLE_MAPS_API_KEY (optional, geocodes the city with Google instead of OpenStreetMap).
+name: trip
+run-name: "trip: ${{ inputs.label || inputs.city || format('{0}, {1}', inputs.lat, inputs.lon) }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      city:
+        description: City or place to look up (used when lat/lon are empty)
+        required: false
+      lat:
+        description: Latitude
+        required: false
+      lon:
+        description: Longitude
+        required: false
+      radius:
+        description: Hotspot search radius in km (max 50)
+        required: false
+        default: "50"
+      label:
+        description: Name shown on the run (the dashboard fills this in)
+        required: false
+
+# One run at a time: they share one eBird key and one DB. A newer request waits for the current one.
+concurrency:
+  group: trip
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ONLYBIRDS_CONTACT: ${{ secrets.ONLYBIRDS_CONTACT }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+      EBIRD_USERNAME: ${{ secrets.EBIRD_USERNAME }}
+      EBIRD_PASSWORD: ${{ secrets.EBIRD_PASSWORD }}
+      INPUT_LABEL: ${{ inputs.label || inputs.city || 'new point' }}
+      INPUT_CITY: ${{ inputs.city }}
+      INPUT_LAT: ${{ inputs.lat }}
+      INPUT_LON: ${{ inputs.lon }}
+      INPUT_RADIUS: ${{ inputs.radius }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --no-dev
+
+      - name: Where to
+        run: |
+          if [ -n "$INPUT_LAT" ] && [ -n "$INPUT_LON" ]; then
+            printf 'ONLYBIRDS_LAT=%s\nONLYBIRDS_LON=%s\n' "$INPUT_LAT" "$INPUT_LON" >> "$GITHUB_ENV"
+          elif [ -n "$INPUT_CITY" ]; then
+            uv run onlybirds geocode "$INPUT_CITY" --env | tee -a "$GITHUB_ENV"
+          else
+            echo "::error::Give lat and lon, or a city."
+            exit 1
+          fi
+
+      - name: Pull today's life list
+        if: ${{ env.EBIRD_USERNAME != '' }}
+        continue-on-error: true
+        run: uv run onlybirds fetch-lifelist
+
+      - name: Refresh
+        run: uv run onlybirds run --csv life-lists/ --radius "${INPUT_RADIUS:-50}" --wait-for-quota
+
+      - name: Commit the DB
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898549+github-actions[bot]@users.noreply.github.com"
+          git add data/onlybirds.db life-lists/
+          if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+          git commit -m "data: trip refresh for $INPUT_LABEL"
+          git pull --rebase origin main
+          git push origin HEAD:main

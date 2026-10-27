@@ -58,3 +58,26 @@ class TestComputeTargets:
         compute_targets(conn)
         row = conn.execute("SELECT is_rare FROM targets WHERE species_code = 'blujay'").fetchone()
         assert row["is_rare"] == 0
+
+    def test_keep_rare_survives_a_lifelist_sync(self, conn):
+        _insert_hotspot_obs(conn, "L1", "amecro")
+        _insert_hotspot_obs(conn, "L1", "vermfly")
+        compute_targets(conn)
+        conn.execute(
+            "UPDATE targets SET is_rare = 1, rare_seen_at = '2026-10-20', rare_loc_name = 'Pond' "
+            "WHERE species_code IN ('amecro', 'vermfly')"
+        )
+        _insert_observation(conn, "vermfly")  # seen since the last run
+
+        compute_targets(conn, keep_rare=True)
+        rows = {r["species_code"]: r for r in conn.execute("SELECT * FROM targets")}
+        assert set(rows) == {"amecro"}
+        assert rows["amecro"]["is_rare"] == 1
+        assert rows["amecro"]["rare_loc_name"] == "Pond"
+
+    def test_full_run_resets_rare(self, conn):
+        _insert_hotspot_obs(conn, "L1", "amecro")
+        compute_targets(conn)
+        conn.execute("UPDATE targets SET is_rare = 1")
+        compute_targets(conn)
+        assert conn.execute("SELECT is_rare FROM targets").fetchone()["is_rare"] == 0
